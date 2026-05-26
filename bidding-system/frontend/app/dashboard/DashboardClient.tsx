@@ -22,7 +22,8 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
   );
 }
 
-function fmt(n: number) {
+function fmt(n: number | null | undefined) {
+  if (n == null) return "-";
   if (n >= 1_0000_0000) return `${(n / 1_0000_0000).toFixed(1)}억`;
   if (n >= 1_0000) return `${(n / 1_0000).toFixed(0)}만`;
   return n.toLocaleString();
@@ -41,10 +42,19 @@ export default function DashboardClient({
   byCategory: CategoryStats[];
   lossRecords: LossRecord[];
 }) {
+  if (!summary || (summary as { detail?: string }).detail) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        데이터를 불러올 수 없습니다.{" "}
+        <a href="/login" className="text-blue-500 underline">로그인</a>이 필요합니다.
+      </div>
+    );
+  }
+
   const pieData = [
-    { name: "낙찰", value: summary.won },
-    { name: "유찰", value: summary.lost },
-    { name: "진행중", value: summary.pending ?? (summary.submitted - summary.won - summary.lost) },
+    { name: "낙찰", value: summary.won ?? 0 },
+    { name: "유찰", value: summary.lost ?? 0 },
+    { name: "진행중", value: summary.pending ?? Math.max(0, (summary.submitted ?? 0) - (summary.won ?? 0) - (summary.lost ?? 0)) },
   ];
 
   return (
@@ -54,7 +64,7 @@ export default function DashboardClient({
         <KpiCard label="총 입찰 건수" value={`${summary.total_applications}건`} />
         <KpiCard
           label="낙찰률"
-          value={`${summary.win_rate.toFixed(1)}%`}
+          value={`${(summary.win_rate ?? 0).toFixed(1)}%`}
           sub={`낙찰 ${summary.won} / 유찰 ${summary.lost}`}
         />
         <KpiCard
@@ -103,7 +113,7 @@ export default function DashboardClient({
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">월별 낙찰률 추이</h2>
         <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={monthly.map(m => ({ ...m, win_rate_pct: +m.win_rate.toFixed(1) }))} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+          <LineChart data={monthly.map(m => ({ ...m, win_rate_pct: +(m.win_rate ?? 0).toFixed(1) }))} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="month" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} unit="%" domain={[0, 100]} />
@@ -122,8 +132,8 @@ export default function DashboardClient({
               <div key={o.organization} className="flex items-center justify-between text-sm">
                 <span className="text-gray-700 truncate flex-1 mr-2">{o.organization || "기타"}</span>
                 <span className="text-gray-400 mr-3 shrink-0">{o.submitted}건</span>
-                <span className={`shrink-0 font-medium ${o.win_rate >= 50 ? "text-green-600" : "text-gray-500"}`}>
-                  {o.win_rate.toFixed(0)}%
+                <span className={`shrink-0 font-medium ${(o.win_rate ?? 0) >= 50 ? "text-green-600" : "text-gray-500"}`}>
+                  {(o.win_rate ?? 0).toFixed(0)}%
                 </span>
               </div>
             ))}
@@ -138,8 +148,8 @@ export default function DashboardClient({
               <div key={c.category} className="flex items-center justify-between text-sm">
                 <span className="text-gray-700 truncate flex-1 mr-2">{c.category || "기타"}</span>
                 <span className="text-gray-400 mr-3 shrink-0">{c.submitted}건</span>
-                <span className={`shrink-0 font-medium ${c.win_rate >= 50 ? "text-green-600" : "text-gray-500"}`}>
-                  {c.win_rate.toFixed(0)}%
+                <span className={`shrink-0 font-medium ${(c.win_rate ?? 0) >= 50 ? "text-green-600" : "text-gray-500"}`}>
+                  {(c.win_rate ?? 0).toFixed(0)}%
                 </span>
               </div>
             ))}

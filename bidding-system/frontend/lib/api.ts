@@ -58,6 +58,8 @@ export interface AnnouncementQuery {
   budget_min?: number;
   budget_max?: number;
   status?: string;
+  deadline_before?: string;
+  deadline_after?: string;
   page?: number;
   size?: number;
 }
