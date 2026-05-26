@@ -5,15 +5,17 @@ import {
   fetchByCategory,
   fetchLossAnalysis,
 } from "@/lib/api";
+import { getServerToken } from "@/lib/server-auth";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
+  const token = await getServerToken();
   const [summary, monthly, byOrg, byCategory, lossRecords] = await Promise.all([
-    fetchDashboardSummary(),
-    fetchMonthlyStats(12),
-    fetchByOrg(),
-    fetchByCategory(),
-    fetchLossAnalysis(),
+    fetchDashboardSummary(token),
+    fetchMonthlyStats(12, token),
+    fetchByOrg(token),
+    fetchByCategory(token),
+    fetchLossAnalysis(token),
   ]);
 
   return (

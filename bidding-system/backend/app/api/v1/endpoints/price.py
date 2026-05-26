@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.award_record import AwardRecord, PriceModel
 from app.services.award_collector import collect_award_records, get_award_stats
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/price", tags=["price"])
 
 
 @router.post("/collect", tags=["admin"])
-async def trigger_collect(db: AsyncSession = Depends(get_db)):
+async def trigger_collect(db: AsyncSession = Depends(get_db), _: object = Depends(get_current_user)):
     """낙찰 이력 수집 (공공데이터 or 시드 데이터)"""
     count = await collect_award_records(db)
     return {"collected": count}
@@ -62,6 +63,7 @@ async def award_stats(
 async def trigger_train(
     category: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    _: object = Depends(get_current_user),
 ):
     """모델 학습 트리거"""
     return await train_model(db, category)

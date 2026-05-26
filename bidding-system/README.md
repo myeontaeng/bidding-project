@@ -10,9 +10,12 @@
 cd backend
 pip install -r requirements.txt
 playwright install chromium
-cp .env.example .env   # 환경변수 편집
+cp .env.example .env   # 환경변수 편집 (ADMIN_PASSWORD 필수)
 python start.py
 ```
+
+로그인: `POST /api/v1/auth/login` → `{"username": "admin", "password": "..."}`  
+이후 모든 요청 헤더에 `Authorization: Bearer <token>` 추가.
 
 서버: http://localhost:8000  
 API 문서: http://localhost:8000/docs
@@ -32,11 +35,20 @@ npm run dev
 | 변수 | 설명 | 필수 |
 |------|------|------|
 | `DATABASE_URL` | SQLite 경로 | ✓ |
+| `ENCRYPTION_KEY` | AES-256-GCM 32바이트 base64url 키 (`python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`) | ✓ |
+| `G2B_API_KEY` | 나라장터 OpenAPI 키 (data.go.kr) | |
+| `JWT_SECRET` | JWT 서명 시크릿 (32자 이상 랜덤) | ✓ |
+| `JWT_EXPIRE_MINUTES` | JWT 만료 시간 분 (기본: 1440) | |
+| `ADMIN_USERNAME` | 관리자 계정명 (기본: admin) | |
+| `ADMIN_PASSWORD` | 관리자 초기 비밀번호 — 기동 시 계정 자동 생성 | ✓ |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL | |
 | `AWS_SES_ACCESS_KEY` | AWS SES 이메일 발송 키 | |
 | `AWS_SES_SECRET_KEY` | AWS SES 시크릿 | |
 | `AWS_SES_REGION` | SES 리전 (기본: ap-northeast-2) | |
 | `NOTIFICATION_EMAIL_FROM` | 발송 이메일 주소 | |
+| `KAKAO_API_KEY` | 카카오 REST API 키 | |
+| `KAKAO_SENDER_KEY` | 카카오 플러스친구 발신 프로필 키 | |
+| `KAKAO_TEMPLATE_CODE` | 카카오 알림톡 템플릿 코드 | |
 | `OPENAI_API_KEY` | 서류 AI 생성 (Phase 2) | |
 | `CRAWL_INTERVAL_MINUTES` | 크롤링 주기 분 (기본: 30) | |
 

@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.filter_config import FilterConfig
 from app.schemas.filter_config import FilterConfigCreate, FilterConfigRead
 
-router = APIRouter(prefix="/filters", tags=["filters"])
+router = APIRouter(prefix="/filters", tags=["filters"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=list[FilterConfigRead])

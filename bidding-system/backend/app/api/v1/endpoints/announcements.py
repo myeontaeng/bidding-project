@@ -2,6 +2,7 @@ import asyncio
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.schemas.announcement import AnnouncementFilter, AnnouncementRead
 from app.services.announcement import get_announcements, _calc_dday
@@ -41,6 +42,6 @@ async def list_announcements(
 
 
 @router.post("/crawl", tags=["admin"])
-async def trigger_crawl():
+async def trigger_crawl(_: object = Depends(get_current_user)):
     asyncio.create_task(_run_crawl())
     return {"status": "crawl triggered"}

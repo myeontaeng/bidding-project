@@ -1,8 +1,10 @@
 import { fetchFilters } from "@/lib/api";
+import { getServerToken } from "@/lib/server-auth";
 import FiltersClient from "./FiltersClient";
 
 export default async function FiltersPage() {
-  const filters = await fetchFilters();
+  const token = await getServerToken();
+  const filters = await fetchFilters(token);
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between">

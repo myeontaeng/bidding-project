@@ -318,7 +318,7 @@ export default function ApplicationDetailClient({ app }: { app: BidApplication }
       {(status === "submitted" || status === "won" || status === "lost") && (
         <ResultInputPanel
           appId={app.id}
-          initialResult={((app as unknown) as Record<string, unknown>).result as string | null ?? null}
+          initialResult={app.result}
         />
       )}
     </div>

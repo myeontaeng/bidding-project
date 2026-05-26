@@ -34,6 +34,12 @@ class BidApplicationRead(BaseModel):
     submitted_at: datetime | None
     created_at: datetime
     documents: list[BidDocumentRead] = []
+    result: str | None = None
+    result_price: float | None = None
+    winner_price: float | None = None
+    our_rank: int | None = None
+    total_bidders: int | None = None
+    loss_reason: str | None = None
 
     model_config = {"from_attributes": True}
 

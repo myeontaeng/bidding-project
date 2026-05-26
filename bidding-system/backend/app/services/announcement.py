@@ -19,18 +19,24 @@ def _calc_dday(deadline: datetime | None) -> int | None:
 
 
 async def upsert_announcements(db: AsyncSession, items: list[dict]) -> tuple[int, int]:
+    if not items:
+        return 0, 0
+
+    bid_numbers = [item["bid_number"] for item in items]
+    existing = set((await db.execute(
+        select(Announcement.bid_number).where(Announcement.bid_number.in_(bid_numbers))
+    )).scalars().all())
+
     new_count = 0
     dup_count = 0
     for item in items:
-        exists = await db.scalar(
-            select(Announcement.id).where(Announcement.bid_number == item["bid_number"])
-        )
-        if exists:
+        if item["bid_number"] in existing:
             dup_count += 1
             continue
         ann = Announcement(**AnnouncementCreate(**item).model_dump())
         db.add(ann)
         new_count += 1
+
     await db.commit()
     return new_count, dup_count
 
@@ -153,6 +159,9 @@ async def send_dday_reminders(db: AsyncSession):
             for ann in anns:
                 if not _matches_filter(ann, fc):
                     continue
+                sent = ann.reminders_sent or []
+                if d in sent:
+                    continue
                 await notify_new_announcement(
                     {
                         "bid_number": ann.bid_number,
@@ -166,3 +175,5 @@ async def send_dday_reminders(db: AsyncSession):
                     email=fc.notify_email,
                     slack=fc.notify_slack,
                 )
+                ann.reminders_sent = sent + [d]
+    await db.commit()

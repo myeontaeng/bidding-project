@@ -1,10 +1,12 @@
 import { fetchApplications, fetchCompanies, fetchAnnouncements } from "@/lib/api";
+import { getServerToken } from "@/lib/server-auth";
 import ApplicationsClient from "./ApplicationsClient";
 
 export default async function ApplicationsPage() {
+  const token = await getServerToken();
   const [applications, companies, { data: announcements }] = await Promise.all([
-    fetchApplications(),
-    fetchCompanies(),
+    fetchApplications(token),
+    fetchCompanies(token),
     fetchAnnouncements({ status: "open", size: 100 }),
   ]);
 

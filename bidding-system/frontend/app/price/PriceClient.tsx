@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   AwardStats, RecommendResult, SimulationResult, MarginResult,
   fetchRecommend, fetchSimulation, fetchMargin,
+  triggerCollect, triggerTrain,
 } from "@/lib/api";
+import { getClientToken } from "@/lib/auth";
 
 const CATEGORIES = ["IT서비스", "소프트웨어", "건설", "용역", "물품구매", "시설공사"];
 const REGIONS = ["서울", "경기", "부산", "인천", "대구", "광주", "대전", "울산", "세종"];
@@ -55,6 +57,13 @@ export default function PriceClient({ initialStats }: { initialStats: AwardStats
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [margin, setMargin] = useState<MarginResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [adminMsg, setAdminMsg] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setIsAdmin(!!getClientToken());
+  }, []);
 
   const run = async () => {
     const bp = Number(basePrice.replace(/,/g, ""));
@@ -82,8 +91,59 @@ export default function PriceClient({ initialStats }: { initialStats: AwardStats
     setMargin(result);
   };
 
+  const runAdmin = async (op: "collect" | "train") => {
+    setAdminLoading(true);
+    setAdminMsg("");
+    try {
+      if (op === "collect") {
+        const res = await triggerCollect();
+        setAdminMsg(`수집 완료: ${res.collected}건 추가`);
+      } else {
+        const res = await triggerTrain(category || undefined);
+        const r = res as Record<string, unknown>;
+        setAdminMsg(
+          r.error
+            ? String(r.error)
+            : `학습 완료 — 버전 ${r.version}, MAE ${Number(r.mae ?? 0).toFixed(4)}, 데이터 ${r.train_count}건`
+        );
+      }
+    } catch {
+      setAdminMsg("요청 실패 (로그인 필요)");
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* 어드민: 데이터 수집 / 모델 학습 */}
+      {isAdmin && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">관리자 — 낙찰 데이터 · 모델</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => runAdmin("collect")}
+              disabled={adminLoading}
+              className="px-3 py-1.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50"
+            >
+              데이터 수집
+            </button>
+            <button
+              onClick={() => runAdmin("train")}
+              disabled={adminLoading}
+              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {category ? `"${category}" 모델 학습` : "전체 모델 학습"}
+            </button>
+          </div>
+          {adminMsg && (
+            <p className="text-xs text-gray-600">{adminMsg}</p>
+          )}
+        </div>
+      )}
+
       {/* 낙찰 통계 요약 */}
       {stats.count > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

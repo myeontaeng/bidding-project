@@ -1,11 +1,12 @@
-"""실적 대시보드 집계"""
+"""실적 대시보드 집계 — SQL GROUP BY 사용 (메모리 풀스캔 제거)"""
 from datetime import datetime, timezone, timedelta
-from collections import defaultdict
-from sqlalchemy import select
+from sqlalchemy import select, case, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bid_application import BidApplication
 from app.models.announcement import Announcement
+
+_SUBMITTED = BidApplication.status.in_(("submitted", "won", "lost"))
 
 
 def _now():
@@ -13,144 +14,176 @@ def _now():
 
 
 async def get_summary(db: AsyncSession) -> dict:
-    """KPI 요약 카드"""
-    apps = list((await db.execute(select(BidApplication))).scalars().all())
-    submitted = [a for a in apps if a.status in ("submitted", "won", "lost")]
-    won = [a for a in apps if a.result == "won"]
-    lost = [a for a in apps if a.result == "lost"]
-
-    award_amount = sum(a.result_price for a in won if a.result_price)
-    bid_amount = sum(a.bid_price for a in submitted if a.bid_price)
-
-    win_rate = round(len(won) / len(submitted) * 100, 1) if submitted else 0
+    """KPI 요약 카드 — 단일 집계 쿼리"""
+    row = (await db.execute(
+        select(
+            func.count().label("total"),
+            func.sum(case((_SUBMITTED, 1), else_=0)).label("submitted"),
+            func.sum(case((BidApplication.result == "won", 1), else_=0)).label("won"),
+            func.sum(case((BidApplication.result == "lost", 1), else_=0)).label("lost"),
+            func.sum(case(
+                (BidApplication.result.is_(None) & (BidApplication.status == "submitted"), 1),
+                else_=0,
+            )).label("pending"),
+            func.coalesce(func.sum(case(
+                (BidApplication.result == "won", BidApplication.result_price),
+                else_=None,
+            )), 0).label("award_amount"),
+            func.coalesce(func.sum(case(
+                (_SUBMITTED, BidApplication.bid_price),
+                else_=None,
+            )), 0).label("bid_amount"),
+        )
+    )).one()
 
     return {
-        "total_applications": len(apps),
-        "submitted": len(submitted),
-        "won": len(won),
-        "lost": len(lost),
-        "pending": len([a for a in apps if a.result is None and a.status == "submitted"]),
-        "win_rate": win_rate,
-        "award_amount": award_amount,
-        "bid_amount": bid_amount,
+        "total_applications": row.total,
+        "submitted": row.submitted,
+        "won": row.won,
+        "lost": row.lost,
+        "pending": row.pending,
+        "win_rate": round(row.won / row.submitted * 100, 1) if row.submitted else 0,
+        "award_amount": row.award_amount or 0,
+        "bid_amount": row.bid_amount or 0,
     }
 
 
 async def get_monthly_stats(db: AsyncSession, months: int = 12) -> list[dict]:
-    """월별 입찰 건수 / 낙찰 건수 / 수주 금액"""
-    apps = list((await db.execute(
-        select(BidApplication).where(BidApplication.status.in_(("submitted", "won", "lost")))
-    )).scalars().all())
-
-    bucket: dict[str, dict] = defaultdict(lambda: {"month": "", "submitted": 0, "won": 0, "lost": 0, "award_amount": 0.0})
-
+    """월별 입찰/낙찰 통계 — GROUP BY
+    참고: SQLite strftime 사용. PostgreSQL 전환 시 func.to_char(col, 'YYYY-MM') 으로 교체.
+    """
     cutoff = _now() - timedelta(days=months * 30)
-    for a in apps:
-        dt = a.submitted_at or a.created_at
-        if dt < cutoff:
-            continue
-        key = dt.strftime("%Y-%m")
-        bucket[key]["month"] = key
-        bucket[key]["submitted"] += 1
-        if a.result == "won":
-            bucket[key]["won"] += 1
-            bucket[key]["award_amount"] += a.result_price or 0
-        elif a.result == "lost":
-            bucket[key]["lost"] += 1
+    month_expr = func.strftime("%Y-%m", BidApplication.submitted_at)
 
-    result = sorted(bucket.values(), key=lambda x: x["month"])
-    for r in result:
-        r["win_rate"] = round(r["won"] / r["submitted"] * 100, 1) if r["submitted"] else 0
-    return result
+    rows = (await db.execute(
+        select(
+            month_expr.label("month"),
+            func.count().label("submitted"),
+            func.sum(case((BidApplication.result == "won", 1), else_=0)).label("won"),
+            func.sum(case((BidApplication.result == "lost", 1), else_=0)).label("lost"),
+            func.coalesce(func.sum(case(
+                (BidApplication.result == "won", BidApplication.result_price),
+                else_=None,
+            )), 0).label("award_amount"),
+        )
+        .where(_SUBMITTED, BidApplication.submitted_at >= cutoff)
+        .group_by(month_expr)
+        .order_by(month_expr)
+    )).all()
+
+    return [
+        {
+            "month": r.month,
+            "submitted": r.submitted,
+            "won": r.won,
+            "lost": r.lost,
+            "award_amount": r.award_amount or 0,
+            "win_rate": round(r.won / r.submitted * 100, 1) if r.submitted else 0,
+        }
+        for r in rows
+    ]
 
 
 async def get_by_organization(db: AsyncSession) -> list[dict]:
-    """발주처별 실적"""
-    apps = list((await db.execute(
-        select(BidApplication).where(BidApplication.status.in_(("submitted", "won", "lost")))
-    )).scalars().all())
+    """발주처별 실적 — JOIN + GROUP BY (상위 20개)"""
+    rows = (await db.execute(
+        select(
+            func.coalesce(Announcement.organization, "미분류").label("organization"),
+            func.count().label("submitted"),
+            func.sum(case((BidApplication.result == "won", 1), else_=0)).label("won"),
+            func.coalesce(func.sum(case(
+                (BidApplication.result == "won", BidApplication.result_price),
+                else_=None,
+            )), 0).label("award_amount"),
+        )
+        .join(Announcement, BidApplication.announcement_id == Announcement.id, isouter=True)
+        .where(_SUBMITTED)
+        .group_by(func.coalesce(Announcement.organization, "미분류"))
+        .order_by(func.count().desc())
+        .limit(20)
+    )).all()
 
-    # announcement 정보 조인
-    ann_ids = list({a.announcement_id for a in apps})
-    anns = {a.id: a for a in (await db.execute(
-        select(Announcement).where(Announcement.id.in_(ann_ids))
-    )).scalars().all()}
-
-    bucket: dict[str, dict] = defaultdict(lambda: {"organization": "", "submitted": 0, "won": 0, "award_amount": 0.0})
-    for a in apps:
-        ann = anns.get(a.announcement_id)
-        org = ann.organization if ann else "미분류"
-        bucket[org]["organization"] = org
-        bucket[org]["submitted"] += 1
-        if a.result == "won":
-            bucket[org]["won"] += 1
-            bucket[org]["award_amount"] += a.result_price or 0
-
-    result = sorted(bucket.values(), key=lambda x: x["submitted"], reverse=True)
-    for r in result:
-        r["win_rate"] = round(r["won"] / r["submitted"] * 100, 1) if r["submitted"] else 0
-    return result[:20]
+    return [
+        {
+            "organization": r.organization,
+            "submitted": r.submitted,
+            "won": r.won,
+            "award_amount": r.award_amount or 0,
+            "win_rate": round(r.won / r.submitted * 100, 1) if r.submitted else 0,
+        }
+        for r in rows
+    ]
 
 
 async def get_by_category(db: AsyncSession) -> list[dict]:
-    """업종별 실적"""
-    apps = list((await db.execute(
-        select(BidApplication).where(BidApplication.status.in_(("submitted", "won", "lost")))
-    )).scalars().all())
+    """업종별 실적 — JOIN + GROUP BY"""
+    rows = (await db.execute(
+        select(
+            func.coalesce(Announcement.category, "미분류").label("category"),
+            func.count().label("submitted"),
+            func.sum(case((BidApplication.result == "won", 1), else_=0)).label("won"),
+            func.coalesce(func.sum(case(
+                (BidApplication.result == "won", BidApplication.result_price),
+                else_=None,
+            )), 0).label("award_amount"),
+        )
+        .join(Announcement, BidApplication.announcement_id == Announcement.id, isouter=True)
+        .where(_SUBMITTED)
+        .group_by(func.coalesce(Announcement.category, "미분류"))
+        .order_by(func.count().desc())
+    )).all()
 
-    ann_ids = list({a.announcement_id for a in apps})
-    anns = {a.id: a for a in (await db.execute(
-        select(Announcement).where(Announcement.id.in_(ann_ids))
-    )).scalars().all()}
-
-    bucket: dict[str, dict] = defaultdict(lambda: {"category": "", "submitted": 0, "won": 0, "award_amount": 0.0})
-    for a in apps:
-        ann = anns.get(a.announcement_id)
-        cat = (ann.category if ann else None) or "미분류"
-        bucket[cat]["category"] = cat
-        bucket[cat]["submitted"] += 1
-        if a.result == "won":
-            bucket[cat]["won"] += 1
-            bucket[cat]["award_amount"] += a.result_price or 0
-
-    result = sorted(bucket.values(), key=lambda x: x["submitted"], reverse=True)
-    for r in result:
-        r["win_rate"] = round(r["won"] / r["submitted"] * 100, 1) if r["submitted"] else 0
-    return result
+    return [
+        {
+            "category": r.category,
+            "submitted": r.submitted,
+            "won": r.won,
+            "award_amount": r.award_amount or 0,
+            "win_rate": round(r.won / r.submitted * 100, 1) if r.submitted else 0,
+        }
+        for r in rows
+    ]
 
 
 async def get_loss_analysis(db: AsyncSession) -> list[dict]:
-    """유찰 원인 분석"""
-    lost_apps = list((await db.execute(
-        select(BidApplication).where(BidApplication.result == "lost")
-    )).scalars().all())
-
-    ann_ids = list({a.announcement_id for a in lost_apps})
-    anns = {a.id: a for a in (await db.execute(
-        select(Announcement).where(Announcement.id.in_(ann_ids))
-    )).scalars().all()}
+    """유찰 원인 분석 — JOIN으로 2단계 로드 제거"""
+    rows = (await db.execute(
+        select(
+            BidApplication.id,
+            BidApplication.announcement_id,
+            BidApplication.bid_price,
+            BidApplication.winner_price,
+            BidApplication.our_rank,
+            BidApplication.total_bidders,
+            BidApplication.loss_reason,
+            BidApplication.submitted_at,
+            Announcement.title,
+            Announcement.organization,
+        )
+        .join(Announcement, BidApplication.announcement_id == Announcement.id, isouter=True)
+        .where(BidApplication.result == "lost")
+        .order_by(BidApplication.submitted_at.desc())
+    )).all()
 
     result = []
-    for a in lost_apps:
-        ann = anns.get(a.announcement_id)
+    for r in rows:
         price_diff = None
         price_diff_pct = None
-        if a.bid_price and a.winner_price:
-            price_diff = a.bid_price - a.winner_price
-            price_diff_pct = round(price_diff / a.winner_price * 100, 2)
-
+        if r.bid_price and r.winner_price:
+            price_diff = r.bid_price - r.winner_price
+            price_diff_pct = round(price_diff / r.winner_price * 100, 2)
         result.append({
-            "id": a.id,
-            "title": ann.title if ann else f"공고 #{a.announcement_id}",
-            "organization": ann.organization if ann else "-",
-            "our_bid_price": a.bid_price,
-            "winner_price": a.winner_price,
+            "id": r.id,
+            "title": r.title or f"공고 #{r.announcement_id}",
+            "organization": r.organization or "-",
+            "our_bid_price": r.bid_price,
+            "winner_price": r.winner_price,
             "price_diff": price_diff,
             "price_diff_pct": price_diff_pct,
-            "our_rank": a.our_rank,
-            "total_bidders": a.total_bidders,
-            "loss_reason": a.loss_reason,
-            "submitted_at": a.submitted_at,
+            "our_rank": r.our_rank,
+            "total_bidders": r.total_bidders,
+            "loss_reason": r.loss_reason,
+            "submitted_at": r.submitted_at,
         })
 
-    return sorted(result, key=lambda x: x["submitted_at"] or datetime.min, reverse=True)
+    return result

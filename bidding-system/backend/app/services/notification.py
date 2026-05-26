@@ -1,4 +1,5 @@
 """알림 발송: Slack Webhook, 이메일(AWS SES)"""
+import asyncio
 import logging
 import httpx
 from app.core.config import settings
@@ -52,20 +53,24 @@ async def send_email(to: str, subject: str, body: str) -> bool:
         return False
     try:
         import boto3
-        client = boto3.client(
-            "ses",
-            region_name=settings.AWS_SES_REGION,
-            aws_access_key_id=settings.AWS_SES_ACCESS_KEY,
-            aws_secret_access_key=settings.AWS_SES_SECRET_KEY,
-        )
-        client.send_email(
-            Source=settings.NOTIFICATION_EMAIL_FROM,
-            Destination={"ToAddresses": [to]},
-            Message={
-                "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
-            },
-        )
+
+        def _send():
+            client = boto3.client(
+                "ses",
+                region_name=settings.AWS_SES_REGION,
+                aws_access_key_id=settings.AWS_SES_ACCESS_KEY,
+                aws_secret_access_key=settings.AWS_SES_SECRET_KEY,
+            )
+            client.send_email(
+                Source=settings.NOTIFICATION_EMAIL_FROM,
+                Destination={"ToAddresses": [to]},
+                Message={
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                },
+            )
+
+        await asyncio.to_thread(_send)
         return True
     except Exception as e:
         logger.error("Email send failed: %s", e)

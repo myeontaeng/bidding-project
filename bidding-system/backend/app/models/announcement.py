@@ -23,3 +23,4 @@ class Announcement(Base):
     raw_data: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
+    reminders_sent: Mapped[list | None] = mapped_column(JSON, default=list)

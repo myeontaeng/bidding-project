@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import { exportCsvUrl, exportExcelUrl } from "@/lib/api";
+import { downloadExport } from "@/lib/api";
 import type {
   DashboardSummary, MonthlyStats, OrgStats, CategoryStats, LossRecord,
 } from "@/lib/api";
@@ -199,20 +199,18 @@ export default function DashboardClient({
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">데이터 내보내기</h2>
         <div className="flex gap-3">
-          <a
-            href={exportCsvUrl()}
-            download
+          <button
+            onClick={() => downloadExport("csv")}
             className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
           >
             CSV 다운로드
-          </a>
-          <a
-            href={exportExcelUrl()}
-            download
+          </button>
+          <button
+            onClick={() => downloadExport("excel")}
             className="px-4 py-2 bg-blue-700 text-white rounded-lg text-sm font-medium hover:bg-blue-800"
           >
             엑셀 다운로드
-          </a>
+          </button>
         </div>
       </div>
     </div>

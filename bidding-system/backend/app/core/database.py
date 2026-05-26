@@ -18,7 +18,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    import app.models.announcement  # noqa: F401
+    import app.models.announcement   # noqa: F401
     import app.models.filter_config  # noqa: F401
+    import app.models.user           # noqa: F401
+    import app.models.company        # noqa: F401
+    import app.models.bid_application  # noqa: F401
+    import app.models.award_record   # noqa: F401
+    import app.models.document_template  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

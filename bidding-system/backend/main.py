@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.database import init_db
+from app.core.database import init_db, AsyncSessionLocal
 from app.api.v1.router import router
 from app.services.scheduler import start_scheduler, stop_scheduler
 
@@ -13,6 +13,26 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    from app.core.auth import seed_admin_user
+    from app.services.award_collector import collect_award_records
+    from app.services.price_model import train_model
+    from app.services.seed_demo import seed_demo_data
+    from app.models.award_record import PriceModel
+    from sqlalchemy import select, func
+    async with AsyncSessionLocal() as db:
+        await seed_admin_user(db)
+        # P3: 낙찰 이력 없으면 시드 데이터 수집
+        await collect_award_records(db)
+        # P3: 학습된 모델 없으면 자동 학습
+        active_model = await db.scalar(
+            select(func.count()).select_from(PriceModel).where(PriceModel.active == True)
+        )
+        if not active_model:
+            await train_model(db)
+        # P4: 입찰 실적 없으면 대시보드 데모 데이터 생성
+        seeded = await seed_demo_data(db)
+        if seeded:
+            logging.getLogger(__name__).info("Demo data seeded: %d applications", seeded)
     start_scheduler()
     yield
     stop_scheduler()

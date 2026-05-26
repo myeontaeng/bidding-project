@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.services.dashboard import (
     get_summary, get_monthly_stats, get_by_organization,
@@ -10,7 +12,7 @@ from app.services.dashboard import (
 from app.services.result_tracker import update_result
 from app.services.export_service import export_csv, export_excel
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(tags=["dashboard"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/dashboard/summary")
@@ -39,13 +41,6 @@ async def loss_analysis(db: AsyncSession = Depends(get_db)):
 
 
 # ── 결과 입력 ─────────────────────────────────────────────────────────────────
-
-class ResultBody:
-    pass
-
-
-from pydantic import BaseModel
-
 
 class ResultUpdate(BaseModel):
     result: str                        # won / lost

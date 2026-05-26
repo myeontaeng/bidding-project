@@ -1,7 +1,6 @@
 """CSV / 엑셀 내보내기"""
 import csv
 import io
-from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,35 +28,55 @@ COLUMNS = [
 ]
 
 
-async def _build_rows(db: AsyncSession) -> list[dict]:
-    apps = list((await db.execute(select(BidApplication))).scalars().all())
-    ann_ids = list({a.announcement_id for a in apps})
-    anns = {a.id: a for a in (await db.execute(
-        select(Announcement).where(Announcement.id.in_(ann_ids))
-    )).scalars().all()}
+_RESULT_KR = {"won": "낙찰", "lost": "유찰"}
 
-    rows = []
-    for a in apps:
-        ann = anns.get(a.announcement_id)
-        rows.append({
-            "id": a.id,
-            "bid_number": ann.bid_number if ann else "",
-            "title": ann.title if ann else "",
-            "organization": ann.organization if ann else "",
-            "category": ann.category if ann else "",
-            "region": ann.region if ann else "",
-            "deadline": ann.deadline.strftime("%Y-%m-%d") if ann and ann.deadline else "",
-            "bid_price": a.bid_price or "",
-            "result": {"won": "낙찰", "lost": "유찰"}.get(a.result or "", a.result or ""),
-            "result_price": a.result_price or "",
-            "winner_price": a.winner_price or "",
-            "our_rank": a.our_rank or "",
-            "total_bidders": a.total_bidders or "",
-            "loss_reason": a.loss_reason or "",
-            "submitted_at": a.submitted_at.strftime("%Y-%m-%d %H:%M") if a.submitted_at else "",
-            "result_updated_at": a.result_updated_at.strftime("%Y-%m-%d %H:%M") if a.result_updated_at else "",
-        })
-    return rows
+
+async def _build_rows(db: AsyncSession) -> list[dict]:
+    """BidApplication JOIN Announcement — 단일 쿼리"""
+    rows_raw = (await db.execute(
+        select(
+            BidApplication.id,
+            BidApplication.bid_price,
+            BidApplication.result,
+            BidApplication.result_price,
+            BidApplication.winner_price,
+            BidApplication.our_rank,
+            BidApplication.total_bidders,
+            BidApplication.loss_reason,
+            BidApplication.submitted_at,
+            BidApplication.result_updated_at,
+            Announcement.bid_number,
+            Announcement.title,
+            Announcement.organization,
+            Announcement.category,
+            Announcement.region,
+            Announcement.deadline,
+        )
+        .join(Announcement, BidApplication.announcement_id == Announcement.id, isouter=True)
+        .order_by(BidApplication.id)
+    )).all()
+
+    return [
+        {
+            "id": r.id,
+            "bid_number": r.bid_number or "",
+            "title": r.title or "",
+            "organization": r.organization or "",
+            "category": r.category or "",
+            "region": r.region or "",
+            "deadline": r.deadline.strftime("%Y-%m-%d") if r.deadline else "",
+            "bid_price": r.bid_price or "",
+            "result": _RESULT_KR.get(r.result or "", r.result or ""),
+            "result_price": r.result_price or "",
+            "winner_price": r.winner_price or "",
+            "our_rank": r.our_rank or "",
+            "total_bidders": r.total_bidders or "",
+            "loss_reason": r.loss_reason or "",
+            "submitted_at": r.submitted_at.strftime("%Y-%m-%d %H:%M") if r.submitted_at else "",
+            "result_updated_at": r.result_updated_at.strftime("%Y-%m-%d %H:%M") if r.result_updated_at else "",
+        }
+        for r in rows_raw
+    ]
 
 
 async def export_csv(db: AsyncSession) -> bytes:

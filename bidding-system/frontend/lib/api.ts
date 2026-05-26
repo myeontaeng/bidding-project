@@ -1,5 +1,25 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+function authHeader(serverToken?: string | null): Record<string, string> {
+  if (serverToken) return { Authorization: `Bearer ${serverToken}` };
+  if (typeof window !== "undefined") {
+    const t = localStorage.getItem("auth_token");
+    if (t) return { Authorization: `Bearer ${t}` };
+  }
+  return {};
+}
+
+export async function login(username: string, password: string): Promise<string> {
+  const res = await fetch(`${BASE}/api/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) throw new Error("Invalid credentials");
+  const data = await res.json();
+  return data.access_token;
+}
+
 export interface Announcement {
   id: number;
   bid_number: string;
@@ -57,8 +77,11 @@ export async function fetchAnnouncements(
   return { data, total };
 }
 
-export async function fetchFilters(): Promise<FilterConfig[]> {
-  const res = await fetch(`${BASE}/api/v1/filters`, { cache: "no-store" });
+export async function fetchFilters(token?: string | null): Promise<FilterConfig[]> {
+  const res = await fetch(`${BASE}/api/v1/filters`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
@@ -67,18 +90,24 @@ export async function createFilter(
 ): Promise<FilterConfig> {
   const res = await fetch(`${BASE}/api/v1/filters`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify(body),
   });
   return res.json();
 }
 
 export async function deleteFilter(id: number): Promise<void> {
-  await fetch(`${BASE}/api/v1/filters/${id}`, { method: "DELETE" });
+  await fetch(`${BASE}/api/v1/filters/${id}`, {
+    method: "DELETE",
+    headers: authHeader(),
+  });
 }
 
 export async function triggerCrawl(): Promise<void> {
-  await fetch(`${BASE}/api/v1/announcements/crawl`, { method: "POST" });
+  await fetch(`${BASE}/api/v1/announcements/crawl`, {
+    method: "POST",
+    headers: authHeader(),
+  });
 }
 
 // ── Phase 2 types ────────────────────────────────────────────────────────────
@@ -120,31 +149,46 @@ export interface BidApplication {
   submitted_at: string | null;
   created_at: string;
   documents: BidDocument[];
+  result: string | null;
+  result_price: number | null;
+  winner_price: number | null;
+  our_rank: number | null;
+  total_bidders: number | null;
+  loss_reason: string | null;
 }
 
 // ── Phase 2 API ──────────────────────────────────────────────────────────────
 
-export async function fetchCompanies(): Promise<Company[]> {
-  const res = await fetch(`${BASE}/api/v1/companies`, { cache: "no-store" });
+export async function fetchCompanies(token?: string | null): Promise<Company[]> {
+  const res = await fetch(`${BASE}/api/v1/companies`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
 export async function createCompany(body: Omit<Company, "id" | "active">): Promise<Company> {
   const res = await fetch(`${BASE}/api/v1/companies`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify(body),
   });
   return res.json();
 }
 
-export async function fetchApplications(): Promise<BidApplication[]> {
-  const res = await fetch(`${BASE}/api/v1/applications`, { cache: "no-store" });
+export async function fetchApplications(token?: string | null): Promise<BidApplication[]> {
+  const res = await fetch(`${BASE}/api/v1/applications`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
-export async function fetchApplication(id: number): Promise<BidApplication> {
-  const res = await fetch(`${BASE}/api/v1/applications/${id}`, { cache: "no-store" });
+export async function fetchApplication(id: number, token?: string | null): Promise<BidApplication> {
+  const res = await fetch(`${BASE}/api/v1/applications/${id}`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
@@ -156,14 +200,17 @@ export async function createApplication(body: {
 }): Promise<BidApplication> {
   const res = await fetch(`${BASE}/api/v1/applications`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify(body),
   });
   return res.json();
 }
 
 export async function submitApplication(id: number): Promise<BidApplication> {
-  const res = await fetch(`${BASE}/api/v1/applications/${id}/submit`, { method: "POST" });
+  const res = await fetch(`${BASE}/api/v1/applications/${id}/submit`, {
+    method: "POST",
+    headers: authHeader(),
+  });
   return res.json();
 }
 
@@ -174,14 +221,17 @@ export async function reviewDocument(
 ): Promise<BidDocument> {
   const res = await fetch(`${BASE}/api/v1/documents/${docId}/review`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify({ action, note }),
   });
   return res.json();
 }
 
-export async function fetchDocument(docId: number): Promise<BidDocument> {
-  const res = await fetch(`${BASE}/api/v1/documents/${docId}`, { cache: "no-store" });
+export async function fetchDocument(docId: number, token?: string | null): Promise<BidDocument> {
+  const res = await fetch(`${BASE}/api/v1/documents/${docId}`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
@@ -346,28 +396,43 @@ export interface ResultUpdate {
 
 // ── Phase 4 API ──────────────────────────────────────────────────────────────
 
-export async function fetchDashboardSummary(): Promise<DashboardSummary> {
-  const res = await fetch(`${BASE}/api/v1/dashboard/summary`, { cache: "no-store" });
+export async function fetchDashboardSummary(token?: string | null): Promise<DashboardSummary> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/summary`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
-export async function fetchMonthlyStats(months = 12): Promise<MonthlyStats[]> {
-  const res = await fetch(`${BASE}/api/v1/dashboard/monthly?months=${months}`, { cache: "no-store" });
+export async function fetchMonthlyStats(months = 12, token?: string | null): Promise<MonthlyStats[]> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/monthly?months=${months}`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
-export async function fetchByOrg(): Promise<OrgStats[]> {
-  const res = await fetch(`${BASE}/api/v1/dashboard/by-org`, { cache: "no-store" });
+export async function fetchByOrg(token?: string | null): Promise<OrgStats[]> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/by-org`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
-export async function fetchByCategory(): Promise<CategoryStats[]> {
-  const res = await fetch(`${BASE}/api/v1/dashboard/by-category`, { cache: "no-store" });
+export async function fetchByCategory(token?: string | null): Promise<CategoryStats[]> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/by-category`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
-export async function fetchLossAnalysis(): Promise<LossRecord[]> {
-  const res = await fetch(`${BASE}/api/v1/dashboard/loss-analysis`, { cache: "no-store" });
+export async function fetchLossAnalysis(token?: string | null): Promise<LossRecord[]> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/loss-analysis`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
   return res.json();
 }
 
@@ -377,16 +442,43 @@ export async function updateApplicationResult(
 ): Promise<{ id: number; result: string; loss_reason: string | null; result_updated_at: string | null }> {
   const res = await fetch(`${BASE}/api/v1/applications/${appId}/result`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify(body),
   });
   return res.json();
 }
 
-export function exportCsvUrl(): string {
-  return `${BASE}/api/v1/export/csv`;
+export async function downloadExport(type: "csv" | "excel"): Promise<void> {
+  const ext = type === "csv" ? "csv" : "xlsx";
+  const res = await fetch(`${BASE}/api/v1/export/${type}`, {
+    headers: authHeader(),
+  });
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bidding_results.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
-export function exportExcelUrl(): string {
-  return `${BASE}/api/v1/export/excel`;
+// ── Phase 3 admin ─────────────────────────────────────────────────────────────
+
+export async function triggerCollect(): Promise<{ collected: number }> {
+  const res = await fetch(`${BASE}/api/v1/price/collect`, {
+    method: "POST",
+    headers: authHeader(),
+  });
+  return res.json();
+}
+
+export async function triggerTrain(category?: string): Promise<Record<string, unknown>> {
+  const p = category ? `?category=${encodeURIComponent(category)}` : "";
+  const res = await fetch(`${BASE}/api/v1/price/train${p}`, {
+    method: "POST",
+    headers: authHeader(),
+  });
+  return res.json();
 }

@@ -1,8 +1,10 @@
 import { fetchCompanies } from "@/lib/api";
+import { getServerToken } from "@/lib/server-auth";
 import CompaniesClient from "./CompaniesClient";
 
 export default async function CompaniesPage() {
-  const companies = await fetchCompanies();
+  const token = await getServerToken();
+  const companies = await fetchCompanies(token);
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between">

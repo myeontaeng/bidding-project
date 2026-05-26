@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.bid_application import BidApplication, BidDocument
 from app.models.document_template import DocumentTemplate
@@ -11,7 +12,7 @@ from app.schemas.bid_application import (
 )
 from app.services.bid_application import create_application, review_document, submit_application
 
-router = APIRouter(tags=["applications"])
+router = APIRouter(tags=["applications"], dependencies=[Depends(get_current_user)])
 
 
 # ── 서류 템플릿 ──────────────────────────────────────────────────────────────
