@@ -32,7 +32,7 @@ def _parse_dt(s: str | None) -> datetime | None:
     s = s.strip()
     for fmt in _DT_FMTS:
         try:
-            return datetime.strptime(s[: len(fmt)], fmt)
+            return datetime.strptime(s, fmt)
         except ValueError:
             continue
     return None

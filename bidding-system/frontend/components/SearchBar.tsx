@@ -23,6 +23,7 @@ export default function SearchBar() {
   const [budgetMax, setBudgetMax] = useState(params.get("budget_max") ?? "");
   const [status, setStatus] = useState(params.get("status") ?? "open");
   const [ddayWithin, setDdayWithin] = useState(params.get("dday_within") ?? "");
+  const [sortBy, setSortBy] = useState(params.get("sort_by") ?? "deadline");
 
   const search = () => {
     const p = new URLSearchParams();
@@ -37,12 +38,13 @@ export default function SearchBar() {
       p.set("deadline_before", addDays(parseInt(ddayWithin)));
       p.set("dday_within", ddayWithin);
     }
+    if (sortBy && sortBy !== "deadline") p.set("sort_by", sortBy);
     router.push(`/?${p}`);
   };
 
   const reset = () => {
     setKeyword(""); setCategory(""); setRegion(""); setOrg("");
-    setBudgetMin(""); setBudgetMax(""); setStatus("open"); setDdayWithin("");
+    setBudgetMin(""); setBudgetMax(""); setStatus("open"); setDdayWithin(""); setSortBy("deadline");
     router.push("/");
   };
 
@@ -51,7 +53,7 @@ export default function SearchBar() {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-      {/* 키워드 + 버튼 */}
+      {/* 키워드 + 정렬 + 버튼 */}
       <div className="flex gap-2">
         <input
           value={keyword}
@@ -60,6 +62,16 @@ export default function SearchBar() {
           placeholder="키워드 검색 (제목, 발주처)"
           className={`flex-1 ${inputCls}`}
         />
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className={selectCls}
+        >
+          <option value="deadline">마감 임박순</option>
+          <option value="published_at">최신 등록순</option>
+          <option value="budget_desc">예산 큰순</option>
+          <option value="budget_asc">예산 작은순</option>
+        </select>
         <button
           onClick={search}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
@@ -77,8 +89,11 @@ export default function SearchBar() {
       {/* 필터 행 1: 상태 / 업종 / 지역 / 발주처 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
-          <option value="open">진행중</option>
-          <option value="closed">마감</option>
+          <option value="open">진행중 (마감일 유효)</option>
+          <option value="imminent">마감임박 (D-7 이내)</option>
+          <option value="no_deadline">기간정보없음</option>
+          <option value="expired">마감됨</option>
+          <option value="closed">종료 (공식)</option>
           <option value="">전체</option>
         </select>
 

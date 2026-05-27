@@ -126,33 +126,85 @@ export default function DashboardClient({
       {/* 발주처별 / 업종별 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">발주처별 현황 (상위 10)</h2>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {byOrg.slice(0, 10).map((o) => (
-              <div key={o.organization} className="flex items-center justify-between text-sm">
-                <span className="text-gray-700 truncate flex-1 mr-2">{o.organization || "기타"}</span>
-                <span className="text-gray-400 mr-3 shrink-0">{o.submitted}건</span>
-                <span className={`shrink-0 font-medium ${(o.win_rate ?? 0) >= 50 ? "text-green-600" : "text-gray-500"}`}>
-                  {(o.win_rate ?? 0).toFixed(0)}%
-                </span>
-              </div>
-            ))}
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">발주처 랭킹 (상위 10)</h2>
+          <div className="space-y-3 max-h-72 overflow-y-auto">
+            {byOrg.slice(0, 10).map((o, i) => {
+              const maxSubmitted = byOrg[0]?.submitted ?? 1;
+              const barPct = Math.round((o.submitted / maxSubmitted) * 100);
+              const rankBadge =
+                i === 0 ? "bg-yellow-100 text-yellow-700" :
+                i === 1 ? "bg-gray-100 text-gray-500" :
+                i === 2 ? "bg-orange-100 text-orange-600" :
+                "bg-gray-50 text-gray-400";
+              return (
+                <div key={o.organization} className="group">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${rankBadge}`}>
+                      {i + 1}
+                    </span>
+                    <a
+                      href={`/?organization=${encodeURIComponent(o.organization)}`}
+                      className="flex-1 text-gray-700 truncate hover:text-blue-600 hover:underline"
+                      title={o.organization}
+                    >
+                      {o.organization || "기타"}
+                    </a>
+                    <span className="text-gray-400 shrink-0">{o.submitted}건</span>
+                    <span className={`shrink-0 font-medium w-10 text-right ${(o.win_rate ?? 0) >= 50 ? "text-green-600" : "text-gray-400"}`}>
+                      {(o.win_rate ?? 0).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="mt-1 ml-8 h-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-300 rounded-full"
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
             {byOrg.length === 0 && <p className="text-gray-400 text-sm">데이터 없음</p>}
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">업종별 현황</h2>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {byCategory.map((c) => (
-              <div key={c.category} className="flex items-center justify-between text-sm">
-                <span className="text-gray-700 truncate flex-1 mr-2">{c.category || "기타"}</span>
-                <span className="text-gray-400 mr-3 shrink-0">{c.submitted}건</span>
-                <span className={`shrink-0 font-medium ${(c.win_rate ?? 0) >= 50 ? "text-green-600" : "text-gray-500"}`}>
-                  {(c.win_rate ?? 0).toFixed(0)}%
-                </span>
-              </div>
-            ))}
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">업종 랭킹</h2>
+          <div className="space-y-3 max-h-72 overflow-y-auto">
+            {byCategory.map((c, i) => {
+              const maxSubmitted = byCategory[0]?.submitted ?? 1;
+              const barPct = Math.round((c.submitted / maxSubmitted) * 100);
+              const rankBadge =
+                i === 0 ? "bg-yellow-100 text-yellow-700" :
+                i === 1 ? "bg-gray-100 text-gray-500" :
+                i === 2 ? "bg-orange-100 text-orange-600" :
+                "bg-gray-50 text-gray-400";
+              return (
+                <div key={c.category}>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${rankBadge}`}>
+                      {i + 1}
+                    </span>
+                    <a
+                      href={`/?category=${encodeURIComponent(c.category)}`}
+                      className="flex-1 text-gray-700 truncate hover:text-blue-600 hover:underline"
+                      title={c.category}
+                    >
+                      {c.category || "기타"}
+                    </a>
+                    <span className="text-gray-400 shrink-0">{c.submitted}건</span>
+                    <span className={`shrink-0 font-medium w-10 text-right ${(c.win_rate ?? 0) >= 50 ? "text-green-600" : "text-gray-400"}`}>
+                      {(c.win_rate ?? 0).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="mt-1 ml-8 h-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-purple-300 rounded-full"
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
             {byCategory.length === 0 && <p className="text-gray-400 text-sm">데이터 없음</p>}
           </div>
         </div>

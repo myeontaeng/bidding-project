@@ -23,6 +23,7 @@ async def list_announcements(
     status: str | None = Query("open"),
     deadline_before: str | None = Query(None),  # YYYY-MM-DD
     deadline_after: str | None = Query(None),   # YYYY-MM-DD
+    sort_by: str = Query("deadline"),           # deadline | published_at | budget_desc | budget_asc
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -43,6 +44,7 @@ async def list_announcements(
         budget_max=budget_max, status=status, page=page, size=size,
         deadline_before=_parse_date(deadline_before, end_of_day=True),
         deadline_after=_parse_date(deadline_after),
+        sort_by=sort_by,
     )
     anns, total = await get_announcements(db, f)
     response.headers["X-Total-Count"] = str(total)

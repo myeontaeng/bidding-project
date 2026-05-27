@@ -29,6 +29,7 @@ export interface Announcement {
   region: string | null;
   budget: number | null;
   deadline: string | null;
+  published_at: string | null;
   source_url: string | null;
   status: string;
   dday: number | null;
@@ -60,6 +61,7 @@ export interface AnnouncementQuery {
   status?: string;
   deadline_before?: string;
   deadline_after?: string;
+  sort_by?: string;
   page?: number;
   size?: number;
 }

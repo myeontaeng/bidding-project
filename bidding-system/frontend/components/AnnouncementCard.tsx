@@ -1,5 +1,6 @@
 import { Announcement } from "@/lib/api";
 import DdayBadge from "./DdayBadge";
+import BookmarkButton from "./BookmarkButton";
 
 interface Props {
   ann: Announcement;
@@ -21,7 +22,67 @@ function fmtDate(s: string | null) {
   });
 }
 
+// 제목에서 도메인 키워드 추출 (DB 변경 없이 작동)
+const KEYWORD_DICT: [string, string][] = [
+  // IT/SW
+  ["AI", "AI"], ["인공지능", "AI"], ["머신러닝", "ML"], ["딥러닝", "딥러닝"],
+  ["빅데이터", "빅데이터"], ["데이터", "데이터"], ["클라우드", "클라우드"],
+  ["IoT", "IoT"], ["블록체인", "블록체인"], ["메타버스", "메타버스"],
+  ["디지털트윈", "디지털트윈"], ["사이버보안", "보안"], ["정보보안", "보안"],
+  ["소프트웨어", "SW"], ["시스템", "시스템"], ["플랫폼", "플랫폼"],
+  ["앱", "앱"], ["모바일", "모바일"], ["웹", "웹"], ["API", "API"],
+  // 기술 분야
+  ["반도체", "반도체"], ["배터리", "배터리"], ["이차전지", "이차전지"],
+  ["수소", "수소"], ["드론", "드론"], ["로봇", "로봇"], ["자율주행", "자율주행"],
+  ["우주", "우주"], ["바이오", "바이오"], ["의료", "의료"], ["헬스케어", "헬스케어"],
+  ["양자", "양자컴퓨팅"], ["5G", "5G"], ["6G", "6G"],
+  // 사업 유형
+  ["R&D", "R&D"], ["연구개발", "R&D"], ["실증", "실증"], ["실용화", "실용화"],
+  ["스마트", "스마트"], ["그린", "그린"], ["탄소중립", "탄소중립"],
+  ["ESG", "ESG"], ["창업", "창업"], ["스타트업", "스타트업"],
+  // 인프라
+  ["네트워크", "네트워크"], ["통신", "통신"], ["위성", "위성"],
+  ["전력", "전력"], ["에너지", "에너지"], ["재생에너지", "재생에너지"],
+];
+
+function extractKeywords(title: string): string[] {
+  const found: string[] = [];
+  for (const [term, label] of KEYWORD_DICT) {
+    if (title.includes(term) && !found.includes(label)) {
+      found.push(label);
+    }
+    if (found.length >= 4) break;
+  }
+  return found;
+}
+
+const TAG_COLORS = [
+  "bg-blue-50 text-blue-700",
+  "bg-purple-50 text-purple-700",
+  "bg-teal-50 text-teal-700",
+  "bg-orange-50 text-orange-700",
+];
+
+function calcProgress(startStr: string | null, deadlineStr: string | null): number | null {
+  if (!startStr || !deadlineStr) return null;
+  const start = new Date(startStr).getTime();
+  const end = new Date(deadlineStr).getTime();
+  const now = Date.now();
+  if (end <= start) return null;
+  return Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100));
+}
+
+function progressBarColor(pct: number): string {
+  if (pct >= 80) return "bg-red-400";
+  if (pct >= 50) return "bg-yellow-400";
+  return "bg-blue-400";
+}
+
 export default function AnnouncementCard({ ann }: Props) {
+  const keywords = extractKeywords(ann.title);
+  const startStr = ann.published_at ?? ann.created_at;
+  const progress = calcProgress(startStr, ann.deadline);
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-3">
@@ -54,7 +115,10 @@ export default function AnnouncementCard({ ann }: Props) {
           </h3>
           <p className="text-sm text-gray-500 mt-0.5">{ann.organization}</p>
         </div>
-        <DdayBadge dday={ann.dday} />
+        <div className="flex items-center gap-1 shrink-0">
+          <BookmarkButton ann={ann} />
+          <DdayBadge dday={ann.dday} />
+        </div>
       </div>
 
       <div className="mt-3 flex items-center gap-4 text-sm text-gray-600">
@@ -70,6 +134,37 @@ export default function AnnouncementCard({ ann }: Props) {
           공고번호: {ann.bid_number}
         </span>
       </div>
+
+      {progress !== null && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-gray-400 mb-1">
+            <span>{fmtDate(startStr)}</span>
+            <span className={progress >= 80 ? "text-red-500 font-medium" : ""}>
+              {progress.toFixed(0)}% 경과
+            </span>
+            <span>{fmtDate(ann.deadline)}</span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${progressBarColor(progress)}`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {keywords.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {keywords.map((kw, i) => (
+            <span
+              key={kw}
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${TAG_COLORS[i % TAG_COLORS.length]}`}
+            >
+              {kw}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

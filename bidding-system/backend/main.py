@@ -19,8 +19,16 @@ async def lifespan(app: FastAPI):
     from app.services.seed_demo import seed_demo_data
     from app.models.award_record import PriceModel
     from sqlalchemy import select, func
+    from app.services.announcement import backfill_deadlines, close_expired_announcements
     async with AsyncSessionLocal() as db:
         await seed_admin_user(db)
+        # deadline NULL 소급 복구 (크롤러 버그 수정 이전 데이터)
+        fixed = await backfill_deadlines(db)
+        if fixed:
+            logging.getLogger(__name__).info("Backfilled %d NULL deadlines from raw_data", fixed)
+        closed = await close_expired_announcements(db)
+        if closed:
+            logging.getLogger(__name__).info("Auto-closed %d expired announcements on startup", closed)
         # P3: 낙찰 이력 없으면 시드 데이터 수집
         await collect_award_records(db)
         # P3: 학습된 모델 없으면 자동 학습

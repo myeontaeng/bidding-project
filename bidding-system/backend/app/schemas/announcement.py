@@ -39,5 +39,6 @@ class AnnouncementFilter(BaseModel):
     status: str | None = "open"
     deadline_before: datetime | None = None
     deadline_after: datetime | None = None
+    sort_by: str = "deadline"  # deadline | published_at | budget_desc | budget_asc
     page: int = 1
     size: int = 20

@@ -6,7 +6,10 @@ from apscheduler.triggers.cron import CronTrigger
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.crawlers.g2b_crawler import crawl_g2b
-from app.services.announcement import upsert_announcements, notify_new_announcements, send_dday_reminders
+from app.services.announcement import (
+    upsert_announcements, notify_new_announcements, send_dday_reminders,
+    backfill_deadlines, close_expired_announcements,
+)
 from app.services.price_model import train_model
 from app.services.result_tracker import poll_submitted_results
 
@@ -22,6 +25,9 @@ async def _run_crawl():
             new, dup = await upsert_announcements(db, items)
             logger.info("Crawl done: new=%d dup=%d", new, dup)
             await notify_new_announcements(db)
+            closed = await close_expired_announcements(db)
+            if closed:
+                logger.info("Auto-closed %d expired announcements", closed)
     except Exception as e:
         logger.error("Crawl job failed: %s", e)
 
