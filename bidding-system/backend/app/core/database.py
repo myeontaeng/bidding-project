@@ -31,6 +31,7 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_announcements(conn)
         await _migrate_companies(conn)
+        await _migrate_users(conn)
 
 
 async def _migrate_announcements(conn):
@@ -55,3 +56,10 @@ async def _migrate_companies(conn):
     existing = {row[1] for row in result.fetchall()}
     if "certifications" not in existing:
         await conn.execute(text("ALTER TABLE companies ADD COLUMN certifications JSON"))
+
+
+async def _migrate_users(conn):
+    result = await conn.execute(text("PRAGMA table_info(users)"))
+    existing = {row[1] for row in result.fetchall()}
+    if "role" not in existing:
+        await conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'admin'"))

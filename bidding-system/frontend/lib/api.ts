@@ -719,3 +719,75 @@ export async function sendChat(message: string): Promise<ChatResponse> {
   });
   return res.json();
 }
+
+// ── 사용자 / 권한 관리 ────────────────────────────────────────────────────────
+
+export interface UserInfo {
+  id: number;
+  username: string;
+  role: "admin" | "partner";
+  is_admin: boolean;
+  created_at: string;
+}
+
+export async function fetchMe(token?: string | null): Promise<UserInfo> {
+  const res = await fetch(`${BASE}/api/v1/auth/me`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error("Not authenticated");
+  return res.json();
+}
+
+export async function fetchUsers(token?: string | null): Promise<UserInfo[]> {
+  const res = await fetch(`${BASE}/api/v1/settings/users`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error("Forbidden");
+  return res.json();
+}
+
+export async function createUser(
+  body: { username: string; password: string; role: string },
+  token?: string | null
+): Promise<UserInfo> {
+  const res = await fetch(`${BASE}/api/v1/settings/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader(token) },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `오류 ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateUser(
+  id: number,
+  body: { role?: string; password?: string },
+  token?: string | null
+): Promise<UserInfo> {
+  const res = await fetch(`${BASE}/api/v1/settings/users/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeader(token) },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `오류 ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteUser(id: number, token?: string | null): Promise<void> {
+  const res = await fetch(`${BASE}/api/v1/settings/users/${id}`, {
+    method: "DELETE",
+    headers: authHeader(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `오류 ${res.status}`);
+  }
+}

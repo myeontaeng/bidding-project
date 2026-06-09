@@ -58,16 +58,23 @@ async def get_current_user(
     return user
 
 
+async def require_admin(user=Depends(get_current_user)):
+    if user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "관리자 권한이 필요합니다")
+    return user
+
+
 async def seed_admin_user(db: AsyncSession) -> None:
     """최초 기동 시 ADMIN_PASSWORD 설정되어 있으면 admin 계정 생성."""
     if not settings.ADMIN_PASSWORD:
         return
-    from app.models.user import User
+    from app.models.user import User, ROLE_ADMIN
     existing = await db.scalar(select(User).where(User.username == settings.ADMIN_USERNAME))
     if not existing:
         db.add(User(
             username=settings.ADMIN_USERNAME,
             hashed_password=hash_password(settings.ADMIN_PASSWORD),
             is_admin=True,
+            role=ROLE_ADMIN,
         ))
         await db.commit()

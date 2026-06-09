@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login } from "@/lib/api";
-import { storeToken } from "@/lib/auth";
+import { login, fetchMe } from "@/lib/api";
+import { storeToken, storeRole } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,6 +19,8 @@ export default function LoginPage() {
     try {
       const token = await login(username, password);
       storeToken(token);
+      const me = await fetchMe(token).catch(() => null);
+      storeRole(me?.role ?? "partner");
       router.push("/");
       router.refresh();
     } catch {
