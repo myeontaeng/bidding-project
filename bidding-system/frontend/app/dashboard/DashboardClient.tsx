@@ -1,16 +1,86 @@
 "use client";
 
+import { useState } from "react";
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import { downloadExport } from "@/lib/api";
+import { downloadExport, fetchOrgAnalysis } from "@/lib/api";
 import type {
-  DashboardSummary, MonthlyStats, OrgStats, CategoryStats, LossRecord,
+  DashboardSummary, MonthlyStats, OrgStats, CategoryStats, LossRecord, OrgAnalysis,
 } from "@/lib/api";
 
 const PIE_COLORS = ["#22c55e", "#ef4444", "#94a3b8"];
+
+function fmtAmt(n: number) {
+  if (n >= 1_0000_0000) return `${(n / 1_0000_0000).toFixed(1)}억`;
+  if (n >= 1_0000) return `${(n / 1_0000).toFixed(0)}만`;
+  return n.toLocaleString();
+}
+
+function OrgAnalysisModal({ org, onClose }: { org: string; onClose: () => void }) {
+  const [data, setData] = useState<OrgAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useState(() => {
+    fetchOrgAnalysis(org).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900 truncate">{org}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg shrink-0 ml-2">✕</button>
+        </div>
+        {loading ? (
+          <p className="text-sm text-gray-400 text-center py-6">분석 중...</p>
+        ) : data ? (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-gray-400 text-xs">총 공고 수</p>
+                <p className="font-bold text-gray-900 mt-0.5">{data.total_announcements}건</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-gray-400 text-xs">평균 예산</p>
+                <p className="font-bold text-gray-900 mt-0.5">{data.avg_budget ? fmtAmt(data.avg_budget) + "원" : "-"}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-gray-400 text-xs">우리 입찰 수</p>
+                <p className="font-bold text-gray-900 mt-0.5">{data.our_bids}건</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-gray-400 text-xs">우리 낙찰률</p>
+                <p className={`font-bold mt-0.5 ${data.our_win_rate >= 30 ? "text-green-600" : "text-gray-900"}`}>
+                  {data.our_win_rate}% ({data.our_wins}승)
+                </p>
+              </div>
+            </div>
+            {data.top_categories.length > 0 && (
+              <div>
+                <p className="text-gray-400 text-xs mb-1">주요 업종</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {data.top_categories.map((c) => (
+                    <span key={c.category} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                      {c.category} ({c.count})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {data.our_award_amount > 0 && (
+              <p className="text-gray-500 text-xs">낙찰 총액: <span className="font-medium text-gray-800">{fmtAmt(data.our_award_amount)}원</span></p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 text-center py-6">데이터 없음</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -51,6 +121,7 @@ export default function DashboardClient({
     );
   }
 
+  const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
   const pieData = [
     { name: "낙찰", value: summary.won ?? 0 },
     { name: "유찰", value: summary.lost ?? 0 },
@@ -59,6 +130,7 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-8">
+      {selectedOrg && <OrgAnalysisModal org={selectedOrg} onClose={() => setSelectedOrg(null)} />}
       {/* KPI 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="총 입찰 건수" value={`${summary.total_applications}건`} />
@@ -142,13 +214,13 @@ export default function DashboardClient({
                     <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${rankBadge}`}>
                       {i + 1}
                     </span>
-                    <a
-                      href={`/?organization=${encodeURIComponent(o.organization)}`}
-                      className="flex-1 text-gray-700 truncate hover:text-blue-600 hover:underline"
-                      title={o.organization}
+                    <button
+                      onClick={() => setSelectedOrg(o.organization)}
+                      className="flex-1 text-gray-700 truncate hover:text-blue-600 text-left"
+                      title={o.organization + " — 클릭하여 분석"}
                     >
                       {o.organization || "기타"}
-                    </a>
+                    </button>
                     <span className="text-gray-400 shrink-0">{o.submitted}건</span>
                     <span className={`shrink-0 font-medium w-10 text-right ${(o.win_rate ?? 0) >= 50 ? "text-green-600" : "text-gray-400"}`}>
                       {(o.win_rate ?? 0).toFixed(0)}%

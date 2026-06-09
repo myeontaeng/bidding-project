@@ -145,6 +145,219 @@ async def get_by_category(db: AsyncSession) -> list[dict]:
     ]
 
 
+async def get_org_analysis(db: AsyncSession, organization: str) -> dict:
+    """특정 발주처 과거 공고 + 우리 입찰 이력 분석."""
+    from app.models.announcement import Announcement
+    from sqlalchemy import and_
+
+    # 발주처 공고 통계
+    org_rows = (await db.execute(
+        select(
+            func.count().label("total_announcements"),
+            func.avg(Announcement.budget).label("avg_budget"),
+            func.max(Announcement.budget).label("max_budget"),
+            func.min(Announcement.budget).label("min_budget"),
+        )
+        .where(Announcement.organization.ilike(f"%{organization}%"))
+    )).one()
+
+    # 업종 분포
+    cat_rows = (await db.execute(
+        select(Announcement.category, func.count().label("cnt"))
+        .where(Announcement.organization.ilike(f"%{organization}%"))
+        .where(Announcement.category.isnot(None))
+        .group_by(Announcement.category)
+        .order_by(func.count().desc())
+        .limit(5)
+    )).all()
+
+    # 우리 입찰 이력
+    bid_rows = (await db.execute(
+        select(
+            func.count().label("total"),
+            func.sum(case((BidApplication.result == "won", 1), else_=0)).label("won"),
+            func.coalesce(func.sum(case(
+                (BidApplication.result == "won", BidApplication.result_price), else_=None
+            )), 0).label("award_amount"),
+        )
+        .join(Announcement, BidApplication.announcement_id == Announcement.id, isouter=True)
+        .where(_SUBMITTED)
+        .where(Announcement.organization.ilike(f"%{organization}%"))
+    )).one()
+
+    return {
+        "organization": organization,
+        "total_announcements": org_rows.total_announcements or 0,
+        "avg_budget": round(org_rows.avg_budget) if org_rows.avg_budget else None,
+        "max_budget": org_rows.max_budget,
+        "min_budget": org_rows.min_budget,
+        "top_categories": [{"category": r.category, "count": r.cnt} for r in cat_rows],
+        "our_bids": bid_rows.total or 0,
+        "our_wins": bid_rows.won or 0,
+        "our_win_rate": round(bid_rows.won / bid_rows.total * 100, 1) if bid_rows.total else 0,
+        "our_award_amount": bid_rows.award_amount or 0,
+    }
+
+
+async def get_today_overview(db: AsyncSession) -> dict:
+    """공고 목록 상단 현황 바 — 인증 불필요 (공개 데이터만)"""
+    from app.models.announcement import Announcement
+    from sqlalchemy import and_, or_
+    now = _now()
+    week_later = now + timedelta(days=7)
+    today_end = now.replace(hour=23, minute=59, second=59)
+
+    # 이번 주 마감 공고 수
+    closing_week = await db.scalar(
+        select(func.count()).select_from(Announcement).where(
+            and_(
+                Announcement.status == "open",
+                Announcement.deadline >= now,
+                Announcement.deadline <= week_later,
+            )
+        )
+    )
+
+    # 오늘 마감
+    closing_today = await db.scalar(
+        select(func.count()).select_from(Announcement).where(
+            and_(
+                Announcement.status == "open",
+                Announcement.deadline >= now,
+                Announcement.deadline <= today_end,
+            )
+        )
+    )
+
+    # 진행중 입찰(결과 미입력)
+    pending = await db.scalar(
+        select(func.count()).select_from(BidApplication).where(
+            BidApplication.status == "submitted",
+            BidApplication.result.is_(None),
+        )
+    )
+
+    # 전체 공개 공고 수
+    total_open = await db.scalar(
+        select(func.count()).select_from(Announcement).where(
+            and_(
+                Announcement.status == "open",
+                or_(Announcement.deadline.is_(None), Announcement.deadline >= now),
+            )
+        )
+    )
+
+    return {
+        "total_open": total_open or 0,
+        "closing_today": closing_today or 0,
+        "closing_this_week": closing_week or 0,
+        "pending_applications": pending or 0,
+    }
+
+
+async def get_archive_stats(db: AsyncSession) -> dict:
+    """아카이브 지표 — 공개 홈 상단 노출용"""
+    from app.models.award_record import AwardRecord
+    from app.models.filter_config import FilterConfig
+
+    total_ann = await db.scalar(select(func.count()).select_from(Announcement))
+    total_awards = await db.scalar(select(func.count()).select_from(AwardRecord))
+    avg_rate = await db.scalar(
+        select(func.avg(AwardRecord.award_rate)).where(AwardRecord.award_rate.isnot(None))
+    )
+    bid_row = (await db.execute(
+        select(
+            func.count().label("submitted"),
+            func.sum(case((BidApplication.result == "won", 1), else_=0)).label("won"),
+        ).where(_SUBMITTED)
+    )).one()
+    active_filters = await db.scalar(
+        select(func.count()).select_from(FilterConfig).where(FilterConfig.active == True)
+    )
+    return {
+        "total_announcements": total_ann or 0,
+        "total_award_records": total_awards or 0,
+        "avg_award_rate": round(avg_rate * 100, 1) if avg_rate else None,
+        "our_win_rate": round(bid_row.won / bid_row.submitted * 100, 1) if bid_row.submitted else None,
+        "our_total_bids": bid_row.submitted or 0,
+        "active_filters": active_filters or 0,
+    }
+
+
+async def get_curated_collections(db: AsyncSession) -> list[dict]:
+    """큐레이션 컬렉션 3종 — 오늘의 유망 / 마감임박 / 소규모"""
+    from sqlalchemy import and_, or_
+    now = _now()
+    week_later = now + timedelta(days=7)
+
+    def _ann_dict(ann: Announcement) -> dict:
+        from app.services.announcement import _calc_dday
+        return {
+            "id": ann.id,
+            "title": ann.title,
+            "organization": ann.organization,
+            "budget": ann.budget,
+            "deadline": ann.deadline.isoformat() if ann.deadline else None,
+            "category": ann.category,
+            "dday": _calc_dday(ann.deadline),
+            "source_url": ann.source_url,
+        }
+
+    # 오늘의 유망: 적정 예산(1억~50억) + D-8 이상 여유
+    promising = list((await db.execute(
+        select(Announcement).where(and_(
+            Announcement.status == "open",
+            Announcement.deadline > week_later,
+            Announcement.budget >= 100_000_000,
+            Announcement.budget <= 5_000_000_000,
+        )).order_by(Announcement.published_at.desc()).limit(5)
+    )).scalars().all())
+
+    # 마감임박: 이번 주 마감
+    imminent = list((await db.execute(
+        select(Announcement).where(and_(
+            Announcement.status == "open",
+            Announcement.deadline >= now,
+            Announcement.deadline <= week_later,
+        )).order_by(Announcement.deadline.asc()).limit(5)
+    )).scalars().all())
+
+    # 소규모: 3억 미만
+    small = list((await db.execute(
+        select(Announcement).where(and_(
+            Announcement.status == "open",
+            Announcement.budget.isnot(None),
+            Announcement.budget > 0,
+            Announcement.budget < 300_000_000,
+            or_(Announcement.deadline.is_(None), Announcement.deadline >= now),
+        )).order_by(Announcement.published_at.desc()).limit(5)
+    )).scalars().all())
+
+    return [
+        {
+            "key": "promising",
+            "label": "오늘의 유망 공고",
+            "description": "적정 예산 + D-8 이상 여유",
+            "icon": "✨",
+            "items": [_ann_dict(a) for a in promising],
+        },
+        {
+            "key": "imminent",
+            "label": "마감임박 공고",
+            "description": "이번 주 마감 — 지금 바로 검토",
+            "icon": "⏰",
+            "items": [_ann_dict(a) for a in imminent],
+        },
+        {
+            "key": "small_scale",
+            "label": "소규모 공고",
+            "description": "3억 미만 — 낮은 진입장벽",
+            "icon": "🎯",
+            "items": [_ann_dict(a) for a in small],
+        },
+    ]
+
+
 async def get_loss_analysis(db: AsyncSession) -> list[dict]:
     """유찰 원인 분석 — JOIN으로 2단계 로드 제거"""
     rows = (await db.execute(

@@ -1,6 +1,12 @@
 from pydantic import BaseModel
 
 
+class CertificationInfo(BaseModel):
+    name: str
+    expiry_date: str        # YYYY-MM-DD
+    cert_type: str | None = None
+
+
 class CompanyCreate(BaseModel):
     name: str
     business_number: str
@@ -11,6 +17,7 @@ class CompanyCreate(BaseModel):
     bank_account: str | None = None
     cert_serial: str | None = None
     business_types: str | None = None
+    certifications: list[CertificationInfo] | None = None
 
 
 class CompanyRead(BaseModel):
@@ -22,6 +29,7 @@ class CompanyRead(BaseModel):
     phone: str | None
     email: str | None
     business_types: str | None
+    certifications: list | None = None
     active: bool
 
     model_config = {"from_attributes": True}

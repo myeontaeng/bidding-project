@@ -32,6 +32,7 @@ def _decrypt_company(c: Company) -> dict:
         "phone": c.phone,
         "email": c.email,
         "business_types": c.business_types,
+        "certifications": c.certifications,
         "active": c.active,
     }
 

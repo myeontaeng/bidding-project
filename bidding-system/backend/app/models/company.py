@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, Boolean
+from sqlalchemy import String, Text, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -18,5 +18,6 @@ class Company(Base):
     bank_account: Mapped[str | None] = mapped_column(String(500))   # 암호화
     cert_serial: Mapped[str | None] = mapped_column(String(500))    # 공동인증서 일련번호, 암호화
     business_types: Mapped[str | None] = mapped_column(Text)        # 업종 목록 (콤마 구분)
+    certifications: Mapped[list | None] = mapped_column(JSON)       # [{name, expiry_date, cert_type}]
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

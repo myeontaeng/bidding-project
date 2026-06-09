@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.bid_application import BidApplication
 from app.models.announcement import Announcement
 from app.services.notification import send_slack, send_email
+from app.services.audit import log_audit
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,10 @@ async def update_result(
             total_bidders=total_bidders,
         )
 
+    await log_audit(db, "application", app.id, "result_set",
+                    details={"result": result, "bid_price": app.bid_price,
+                             "result_price": result_price, "winner_price": winner_price,
+                             "our_rank": our_rank, "total_bidders": total_bidders})
     await db.commit()
     await db.refresh(app)
 

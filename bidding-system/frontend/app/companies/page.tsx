@@ -1,10 +1,13 @@
-import { fetchCompanies } from "@/lib/api";
+import { fetchCompanies, fetchExpiringCerts } from "@/lib/api";
 import { getServerToken } from "@/lib/server-auth";
 import CompaniesClient from "./CompaniesClient";
 
 export default async function CompaniesPage() {
   const token = await getServerToken();
-  const companies = await fetchCompanies(token);
+  const [companies, expiringCerts] = await Promise.all([
+    fetchCompanies(token),
+    fetchExpiringCerts(90, token).catch(() => []),
+  ]);
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -14,7 +17,7 @@ export default async function CompaniesPage() {
         </div>
         <a href="/" className="text-sm text-blue-600 hover:underline">← 공고 목록</a>
       </div>
-      <CompaniesClient initialCompanies={companies} />
+      <CompaniesClient initialCompanies={companies} expiringCerts={expiringCerts} />
     </main>
   );
 }

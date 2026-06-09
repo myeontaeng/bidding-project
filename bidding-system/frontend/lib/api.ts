@@ -34,6 +34,86 @@ export interface Announcement {
   status: string;
   dday: number | null;
   created_at: string;
+  ministry: string | null;
+  support_type: string | null;
+  budget_available: number | null;
+  eligible_institutions: string[] | null;
+  description: string | null;
+  opening_date: string | null;
+  fit_score: number | null;
+}
+
+export interface TodayOverview {
+  total_open: number;
+  closing_today: number;
+  closing_this_week: number;
+  pending_applications: number;
+}
+
+export interface CertificationInfo {
+  name: string;
+  expiry_date: string;
+  cert_type: string | null;
+}
+
+export interface ExpiringCert {
+  company_id: number;
+  company_name: string;
+  cert_name: string;
+  cert_type: string | null;
+  expiry_date: string;
+  days_remaining: number;
+  expired: boolean;
+}
+
+export interface BidScoreBreakdown {
+  score: number;
+  max: number;
+  label: string;
+}
+
+export interface BidScore {
+  overall: number;
+  max: number;
+  recommendation: "bid" | "caution" | "pass";
+  recommendation_label: string;
+  recommendation_color: string;
+  breakdown: Record<string, BidScoreBreakdown>;
+  reasoning: string[];
+}
+
+export interface OrgAnalysis {
+  organization: string;
+  total_announcements: number;
+  avg_budget: number | null;
+  max_budget: number | null;
+  min_budget: number | null;
+  top_categories: { category: string; count: number }[];
+  our_bids: number;
+  our_wins: number;
+  our_win_rate: number;
+  our_award_amount: number;
+}
+
+export interface AuditEntry {
+  id: number;
+  action: string;
+  actor: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface MatchCheck {
+  label: string;
+  pass: boolean;
+  unknown: boolean;
+  detail: string;
+}
+
+export interface MatchResult {
+  score: number;
+  checks: MatchCheck[];
+  company_name: string;
 }
 
 export interface FilterConfig {
@@ -64,6 +144,29 @@ export interface AnnouncementQuery {
   sort_by?: string;
   page?: number;
   size?: number;
+}
+
+export async function fetchAnnouncement(id: number): Promise<Announcement> {
+  const res = await fetch(`${BASE}/api/v1/announcements/${id}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Announcement not found");
+  return res.json();
+}
+
+export async function fetchMatchScore(annId: number, companyId: number): Promise<MatchResult> {
+  const res = await fetch(`${BASE}/api/v1/announcements/${annId}/match?company_id=${companyId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Match failed");
+  return res.json();
+}
+
+export async function summarizeAnnouncement(annId: number): Promise<{ description: string }> {
+  const res = await fetch(`${BASE}/api/v1/announcements/${annId}/summarize`, {
+    method: "POST",
+    headers: authHeader(),
+  });
+  if (!res.ok) throw new Error("Summarize failed");
+  return res.json();
 }
 
 export async function fetchAnnouncements(
@@ -207,6 +310,10 @@ export async function createApplication(body: {
     headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify(body),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `서버 오류 (${res.status})`);
+  }
   return res.json();
 }
 
@@ -400,6 +507,11 @@ export interface ResultUpdate {
 
 // ── Phase 4 API ──────────────────────────────────────────────────────────────
 
+export async function fetchTodayOverview(): Promise<TodayOverview> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/today`, { cache: "no-store" });
+  return res.json();
+}
+
 export async function fetchDashboardSummary(token?: string | null): Promise<DashboardSummary> {
   const res = await fetch(`${BASE}/api/v1/dashboard/summary`, {
     cache: "no-store",
@@ -470,6 +582,47 @@ export async function downloadExport(type: "csv" | "excel"): Promise<void> {
 
 // ── Phase 3 admin ─────────────────────────────────────────────────────────────
 
+export async function fetchExpiringCerts(days = 90, token?: string | null): Promise<ExpiringCert[]> {
+  const res = await fetch(`${BASE}/api/v1/companies/expiring-certs?days=${days}`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
+  return res.json();
+}
+
+export async function fetchBidScore(annId: number, token?: string | null): Promise<BidScore> {
+  const res = await fetch(`${BASE}/api/v1/announcements/${annId}/bid-score`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error(`BidScore fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchOrgAnalysis(organization: string, token?: string | null): Promise<OrgAnalysis> {
+  const res = await fetch(
+    `${BASE}/api/v1/dashboard/org-analysis?organization=${encodeURIComponent(organization)}`,
+    { cache: "no-store", headers: authHeader(token) }
+  );
+  return res.json();
+}
+
+export async function fetchAuditTrail(entityType: string, entityId: number, token?: string | null): Promise<AuditEntry[]> {
+  const res = await fetch(
+    `${BASE}/api/v1/audit?entity_type=${entityType}&entity_id=${entityId}`,
+    { cache: "no-store", headers: authHeader(token) }
+  );
+  return res.json();
+}
+
+export async function updateCompanyCerts(companyId: number, certifications: CertificationInfo[]): Promise<void> {
+  await fetch(`${BASE}/api/v1/companies/${companyId}/certs`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify({ certifications }),
+  });
+}
+
 export async function triggerCollect(): Promise<{ collected: number }> {
   const res = await fetch(`${BASE}/api/v1/price/collect`, {
     method: "POST",
@@ -483,6 +636,86 @@ export async function triggerTrain(category?: string): Promise<Record<string, un
   const res = await fetch(`${BASE}/api/v1/price/train${p}`, {
     method: "POST",
     headers: authHeader(),
+  });
+  return res.json();
+}
+
+// ── Agri-Logos 개선 기능 ──────────────────────────────────────────────────────
+
+export interface ArchiveStats {
+  total_announcements: number;
+  total_award_records: number;
+  avg_award_rate: number | null;
+  our_win_rate: number | null;
+  our_total_bids: number;
+  active_filters: number;
+}
+
+export interface CollectionItem {
+  id: number;
+  title: string;
+  organization: string;
+  budget: number | null;
+  deadline: string | null;
+  category: string | null;
+  dday: number | null;
+  source_url: string | null;
+}
+
+export interface CuratedCollection {
+  key: string;
+  label: string;
+  description: string;
+  icon: string;
+  items: CollectionItem[];
+}
+
+export interface AutoSetup {
+  announcement_id: number;
+  title: string;
+  summary: string;
+  bid_score: BidScore & { needs_expert_review: boolean; expert_review_reason: string | null };
+  price_recommendation: RecommendResult | null;
+  required_docs: string[];
+  match: MatchResult | null;
+}
+
+export interface ChatResponse {
+  message: string;
+  announcements: CollectionItem[];
+  filter_applied: Record<string, unknown>;
+  ai_used: boolean;
+}
+
+export async function fetchArchiveStats(): Promise<ArchiveStats> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/archive-stats`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function fetchCuratedCollections(): Promise<CuratedCollection[]> {
+  const res = await fetch(`${BASE}/api/v1/dashboard/collections`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function fetchAutoSetup(
+  annId: number,
+  companyId?: number,
+  token?: string | null
+): Promise<AutoSetup> {
+  const p = companyId ? `?company_id=${companyId}` : "";
+  const res = await fetch(`${BASE}/api/v1/announcements/${annId}/auto-setup${p}`, {
+    cache: "no-store",
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error("Auto-setup failed");
+  return res.json();
+}
+
+export async function sendChat(message: string): Promise<ChatResponse> {
+  const res = await fetch(`${BASE}/api/v1/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
   });
   return res.json();
 }

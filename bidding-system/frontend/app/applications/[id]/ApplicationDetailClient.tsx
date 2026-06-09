@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BidApplication, BidDocument, reviewDocument, submitApplication, updateApplicationResult } from "@/lib/api";
+import { BidApplication, BidDocument, AuditEntry, reviewDocument, submitApplication, updateApplicationResult, fetchAuditTrail } from "@/lib/api";
 
 const DOC_LABELS: Record<string, string> = {
   bid_application: "입찰참가신청서",
@@ -233,6 +233,66 @@ function ResultInputPanel({ appId, initialResult }: { appId: number; initialResu
   );
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  created: "지원 생성",
+  submitted: "입찰 제출",
+  result_set: "결과 입력",
+  doc_approved: "서류 승인",
+  doc_rejected: "서류 반려",
+};
+
+function AuditPanel({ appId }: { appId: number }) {
+  const [logs, setLogs] = useState<AuditEntry[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    if (logs.length > 0) { setOpen(true); return; }
+    setLoading(true);
+    try {
+      const data = await fetchAuditTrail("application", appId);
+      setLogs(data);
+      setOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <button onClick={() => open ? setOpen(false) : load()}
+        className="w-full flex items-center justify-between text-sm font-medium text-gray-700">
+        <span>변경 이력</span>
+        <span className="text-gray-400">{loading ? "..." : open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          {logs.length === 0 ? (
+            <p className="text-sm text-gray-400">이력 없음</p>
+          ) : logs.map((l) => (
+            <div key={l.id} className="flex items-start gap-3 text-xs">
+              <span className="text-gray-300 mt-0.5 shrink-0">
+                {new Date(l.created_at).toLocaleString("ko-KR")}
+              </span>
+              <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded shrink-0">
+                {ACTION_LABELS[l.action] ?? l.action}
+              </span>
+              {l.details && (
+                <span className="text-gray-500 truncate">
+                  {Object.entries(l.details)
+                    .filter(([, v]) => v !== null && v !== undefined)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(" · ")}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ApplicationDetailClient({ app }: { app: BidApplication }) {
   const router = useRouter();
   const [docs, setDocs] = useState(app.documents);
@@ -321,6 +381,9 @@ export default function ApplicationDetailClient({ app }: { app: BidApplication }
           initialResult={app.result}
         />
       )}
+
+      {/* 변경 이력 */}
+      <AuditPanel appId={app.id} />
     </div>
   );
 }

@@ -1,3 +1,5 @@
+"use client";
+
 import { Announcement } from "@/lib/api";
 import DdayBadge from "./DdayBadge";
 import BookmarkButton from "./BookmarkButton";
@@ -100,22 +102,36 @@ export default function AnnouncementCard({ ann }: Props) {
             )}
           </div>
           <h3 className="font-semibold text-gray-900 truncate">
-            {ann.source_url ? (
-              <a
-                href={ann.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-600"
-              >
-                {ann.title}
-              </a>
-            ) : (
-              ann.title
-            )}
+            <a href={`/announcements/${ann.id}`} className="hover:text-blue-600">
+              {ann.title}
+            </a>
           </h3>
           <p className="text-sm text-gray-500 mt-0.5">{ann.organization}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {ann.fit_score !== null && ann.fit_score !== undefined && ann.fit_score >= 60 && (
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+              ann.fit_score >= 80
+                ? "bg-green-100 text-green-700"
+                : "bg-yellow-100 text-yellow-700"
+            }`}>
+              ★ {ann.fit_score}%
+            </span>
+          )}
+          {ann.source_url && (
+            <a
+              href={ann.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="나라장터 원문"
+              className="text-gray-300 hover:text-blue-500 p-1 rounded"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          )}
           <BookmarkButton ann={ann} />
           <DdayBadge dday={ann.dday} />
         </div>
@@ -148,6 +164,7 @@ export default function AnnouncementCard({ ann }: Props) {
             <div
               className={`h-full rounded-full transition-all ${progressBarColor(progress)}`}
               style={{ width: `${progress}%` }}
+              suppressHydrationWarning
             />
           </div>
         </div>

@@ -9,6 +9,7 @@ from app.models.document_template import DocumentTemplate
 from app.schemas.bid_application import BidApplicationCreate
 from app.services.company import get_company, get_company_raw
 from app.services.document_ai import identify_required_docs, generate_document_draft
+from app.services.audit import log_audit
 
 
 def _now():
@@ -65,6 +66,8 @@ async def create_application(db: AsyncSession, data: BidApplicationCreate) -> Bi
         )
         db.add(doc)
 
+    await log_audit(db, "application", app.id, "created",
+                    details={"announcement_id": data.announcement_id, "company_id": data.company_id})
     await db.commit()
     await db.refresh(app)
     return app
@@ -90,6 +93,8 @@ async def review_document(
     else:
         raise HTTPException(400, "action must be 'approve' or 'reject'")
 
+    await log_audit(db, "application", doc.application_id,
+                    f"doc_{action}d", details={"doc_id": doc.id, "doc_type": doc.doc_type, "note": note})
     await db.commit()
     await db.refresh(doc)
     return doc
@@ -117,6 +122,8 @@ async def submit_application(db: AsyncSession, app_id: int) -> BidApplication:
         doc.status = "submitted"
         doc.submitted_at = _now()
 
+    await log_audit(db, "application", app.id, "submitted",
+                    details={"bid_price": app.bid_price})
     await db.commit()
     await db.refresh(app)
     return app

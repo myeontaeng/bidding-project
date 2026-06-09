@@ -25,9 +25,12 @@ export default function ApplicationsClient({ initialApplications, companies, ann
   const [form, setForm] = useState({ announcement_id: 0, company_id: 0, bid_price: "", notes: "" });
   const [creating, setCreating] = useState(false);
 
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const handleCreate = async () => {
     if (!form.announcement_id || !form.company_id) return;
     setCreating(true);
+    setCreateError(null);
     try {
       const app = await createApplication({
         announcement_id: form.announcement_id,
@@ -39,6 +42,8 @@ export default function ApplicationsClient({ initialApplications, companies, ann
       setShowForm(false);
       setForm({ announcement_id: 0, company_id: 0, bid_price: "", notes: "" });
       router.push(`/applications/${app.id}`);
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : "지원 생성 실패");
     } finally {
       setCreating(false);
     }
@@ -148,6 +153,12 @@ export default function ApplicationsClient({ initialApplications, companies, ann
               />
             </div>
           </div>
+
+          {createError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
+              {createError}
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button

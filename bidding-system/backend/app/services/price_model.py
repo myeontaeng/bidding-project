@@ -26,18 +26,33 @@ REGION_MAP = {
 }
 
 
+def _price_bucket(base_price: float) -> int:
+    """3억 미만/이상 구간 분리 (실무 연구 기반 MAE 개선)"""
+    if base_price < 50_000_000:
+        return 0
+    if base_price < 300_000_000:
+        return 1
+    if base_price < 1_000_000_000:
+        return 2
+    return 3
+
+
 def _build_features(records: list[AwardRecord]) -> tuple:
     """피처 행렬 + 타깃 벡터 생성"""
     X, y = [], []
     for r in records:
-        if r.base_price is None or r.award_rate is None:
+        if r.base_price is None or r.award_rate is None or r.award_rate == 0:
             continue
+        bp = float(r.base_price)
         X.append([
-            float(r.base_price),
+            bp,
+            float(np.log10(max(bp, 1))),           # log scale — 가격 범위 정규화
             float(CATEGORY_MAP.get(r.category or "", -1) + 1),
             float(REGION_MAP.get(r.region or "", -1) + 1),
             float(r.bid_count or 5),
             float(r.award_date.month if r.award_date else 6),
+            float((r.award_date.month - 1) // 3 + 1 if r.award_date else 2),  # quarter
+            float(_price_bucket(bp)),               # 3억 기준 구간 (핵심 피처)
         ])
         y.append(float(r.award_rate))
     return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
@@ -68,8 +83,10 @@ async def train_model(db: AsyncSession, category: str | None = None) -> dict:
             min_child_samples=5, random_state=42, verbose=-1,
         )
         model.fit(X_train, y_train, eval_set=[(X_val, y_val)], callbacks=[lgb.early_stopping(20, verbose=False)])
-        fi = dict(zip(["base_price", "category", "region", "bid_count", "month"],
-                      model.feature_importances_.tolist()))
+        fi = dict(zip(
+            ["base_price", "log_price", "category", "region", "bid_count", "month", "quarter", "price_bucket"],
+            model.feature_importances_.tolist(),
+        ))
     except Exception as e:
         logger.warning("LightGBM failed (%s), fallback to Ridge", e)
         from sklearn.linear_model import Ridge
@@ -137,15 +154,23 @@ async def predict_award_rate(
         return _stat_based_recommendation(base_price)
 
     month = datetime.now(timezone.utc).month
+    quarter = (month - 1) // 3 + 1
     X = np.array([[
         base_price,
+        float(np.log10(max(base_price, 1))),
         float(CATEGORY_MAP.get(category or "", -1) + 1),
         float(REGION_MAP.get(region or "", -1) + 1),
         float(bid_count),
         float(month),
+        float(quarter),
+        float(_price_bucket(base_price)),
     ]], dtype=np.float32)
 
-    predicted_rate = float(model.predict(X)[0])
+    try:
+        predicted_rate = float(model.predict(X)[0])
+    except ValueError:
+        # 저장된 모델의 피처 수가 현재 코드와 다를 때 (구버전 모델)
+        return _stat_based_recommendation(base_price)
     predicted_rate = max(0.80, min(0.99, predicted_rate))
 
     # 추천 범위: 예측값 ±1.5%

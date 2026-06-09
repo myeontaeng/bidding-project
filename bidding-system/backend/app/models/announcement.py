@@ -24,3 +24,10 @@ class Announcement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
     reminders_sent: Mapped[list | None] = mapped_column(JSON, default=list)
+    # 상세 정보 필드
+    ministry: Mapped[str | None] = mapped_column(String(200))         # 공고기관 (주관부처)
+    support_type: Mapped[str | None] = mapped_column(String(100))     # 입찰방법 / 지원유형
+    budget_available: Mapped[float | None] = mapped_column(Float)     # 배정예산 (총예산과 구분)
+    eligible_institutions: Mapped[list | None] = mapped_column(JSON)  # 신청 가능 기관 목록
+    description: Mapped[str | None] = mapped_column(Text)             # 공고 본문 요약
+    opening_date: Mapped[datetime | None] = mapped_column(DateTime)   # 개찰일

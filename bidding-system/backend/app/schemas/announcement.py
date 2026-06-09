@@ -14,6 +14,12 @@ class AnnouncementBase(BaseModel):
     source_url: str | None = None
     source: str = "g2b"
     status: str = "open"
+    ministry: str | None = None
+    support_type: str | None = None
+    budget_available: float | None = None
+    eligible_institutions: list | None = None
+    description: str | None = None
+    opening_date: datetime | None = None
 
 
 class AnnouncementCreate(AnnouncementBase):
@@ -24,7 +30,8 @@ class AnnouncementRead(AnnouncementBase):
     id: int
     created_at: datetime
     notified: bool
-    dday: int | None = None  # 마감일까지 남은 일수
+    dday: int | None = None
+    fit_score: int | None = None  # 0-100, 활성 필터 기준 적합도
 
     model_config = {"from_attributes": True}
 

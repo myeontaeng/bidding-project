@@ -20,12 +20,21 @@ async def lifespan(app: FastAPI):
     from app.models.award_record import PriceModel
     from sqlalchemy import select, func
     from app.services.announcement import backfill_deadlines, close_expired_announcements
+    try:
+        from backfill_new_fields import backfill as _backfill_new_fields
+    except ImportError:
+        _backfill_new_fields = None
     async with AsyncSessionLocal() as db:
         await seed_admin_user(db)
         # deadline NULL 소급 복구 (크롤러 버그 수정 이전 데이터)
         fixed = await backfill_deadlines(db)
         if fixed:
             logging.getLogger(__name__).info("Backfilled %d NULL deadlines from raw_data", fixed)
+        # 새 필드(ministry, support_type 등) 소급 추출
+        if _backfill_new_fields:
+            new_fixed = await _backfill_new_fields(db)
+            if new_fixed:
+                logging.getLogger(__name__).info("Backfilled new fields for %d announcements", new_fixed)
         closed = await close_expired_announcements(db)
         if closed:
             logging.getLogger(__name__).info("Auto-closed %d expired announcements on startup", closed)

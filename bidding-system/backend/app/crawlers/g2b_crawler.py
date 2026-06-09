@@ -53,13 +53,31 @@ def _parse_api_item(item: dict) -> dict | None:
                 f"?bidPbancNo={item.get('bidNtceNo')}&bidPbancOrd={item.get('bidNtceOrd')}"
             )
         )
+        raw_avail = item.get("asignBdgtAmt")
+        try:
+            budget_available = float(raw_avail) if raw_avail else None
+        except (ValueError, TypeError):
+            budget_available = None
+
+        prtcpt = item.get("prtcptLmtYn")
+        eligible: list | None = None
+        if prtcpt == "Y":
+            eligible = ["제한경쟁"]
+        elif prtcpt == "N":
+            eligible = ["일반경쟁"]
+
         return {
             "bid_number": bid_number,
             "title": item.get("bidNtceNm", "").strip(),
             "organization": item.get("dminsttNm", "").strip(),
+            "ministry": (item.get("ntceInsttNm") or "").strip() or None,
             "category": item.get("bidMethdNm") or item.get("ntceInsttOfclNm"),
+            "support_type": item.get("bidMethdNm") or None,
             "budget": budget,
-            "deadline": _parse_dt(item.get("bidClseDt") or item.get("opengDt")),
+            "budget_available": budget_available,
+            "eligible_institutions": eligible,
+            "deadline": _parse_dt(item.get("bidClseDt")),
+            "opening_date": _parse_dt(item.get("opengDt")),
             "published_at": _parse_dt(item.get("bidNtceDt") or item.get("rgstDt")) or datetime.utcnow(),
             "source_url": source_url,
             "source": "g2b",
