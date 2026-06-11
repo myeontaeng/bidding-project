@@ -10,7 +10,7 @@ from app.schemas.bid_application import (
     BidApplicationCreate, BidApplicationRead,
     ReviewAction, DocumentTemplateCreate,
 )
-from app.services.bid_application import create_application, review_document, submit_application
+from app.services.bid_application import create_application, review_document, submit_application, cancel_application
 
 router = APIRouter(tags=["applications"], dependencies=[Depends(get_current_user)])
 
@@ -59,6 +59,11 @@ async def get_application(app_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/applications/{app_id}/submit", response_model=BidApplicationRead)
 async def submit(app_id: int, db: AsyncSession = Depends(get_db)):
     return await submit_application(db, app_id)
+
+
+@router.post("/applications/{app_id}/cancel", response_model=BidApplicationRead)
+async def cancel(app_id: int, db: AsyncSession = Depends(get_db)):
+    return await cancel_application(db, app_id)
 
 
 # ── 서류 검토/승인 ────────────────────────────────────────────────────────────

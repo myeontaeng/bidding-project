@@ -325,6 +325,18 @@ export async function submitApplication(id: number): Promise<BidApplication> {
   return res.json();
 }
 
+export async function cancelApplication(id: number): Promise<BidApplication> {
+  const res = await fetch(`${BASE}/api/v1/applications/${id}/cancel`, {
+    method: "POST",
+    headers: authHeader(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `오류 ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function reviewDocument(
   docId: number,
   action: "approve" | "reject",

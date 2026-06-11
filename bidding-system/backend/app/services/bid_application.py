@@ -79,7 +79,7 @@ async def review_document(
     doc = await db.get(BidDocument, doc_id)
     if not doc:
         raise HTTPException(404, "Document not found")
-    if doc.status not in ("draft", "review"):
+    if doc.status not in ("draft", "review", "rejected"):
         raise HTTPException(400, f"Cannot review document in status '{doc.status}'")
 
     doc.reviewer_note = note
@@ -93,11 +93,38 @@ async def review_document(
     else:
         raise HTTPException(400, "action must be 'approve' or 'reject'")
 
+    # 서류 상태 변경에 따라 입찰 지원 상태 자동 갱신
+    app = await db.get(BidApplication, doc.application_id)
+    if app and app.status not in ("submitted", "won", "lost", "cancelled"):
+        if action == "reject":
+            app.status = "rejected"
+        elif action == "approve":
+            other_rejected = any(
+                d.status == "rejected"
+                for d in app.documents
+                if d.id != doc.id
+            )
+            if not other_rejected:
+                app.status = "in_progress"
+
     await log_audit(db, "application", doc.application_id,
                     f"doc_{action}d", details={"doc_id": doc.id, "doc_type": doc.doc_type, "note": note})
     await db.commit()
     await db.refresh(doc)
     return doc
+
+
+async def cancel_application(db: AsyncSession, app_id: int) -> BidApplication:
+    app = await db.get(BidApplication, app_id)
+    if not app:
+        raise HTTPException(404, "Application not found")
+    if app.status in ("submitted", "won", "lost"):
+        raise HTTPException(400, f"제출 완료/결과 확정 건은 취소할 수 없습니다 (현재 상태: {app.status})")
+    app.status = "cancelled"
+    await log_audit(db, "application", app.id, "cancelled", details={})
+    await db.commit()
+    await db.refresh(app)
+    return app
 
 
 async def submit_application(db: AsyncSession, app_id: int) -> BidApplication:

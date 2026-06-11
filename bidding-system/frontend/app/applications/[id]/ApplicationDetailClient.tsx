@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BidApplication, BidDocument, AuditEntry, reviewDocument, submitApplication, updateApplicationResult, fetchAuditTrail } from "@/lib/api";
+import { BidApplication, BidDocument, AuditEntry, reviewDocument, submitApplication, cancelApplication, updateApplicationResult, fetchAuditTrail } from "@/lib/api";
 
 const DOC_LABELS: Record<string, string> = {
   bid_application: "입찰참가신청서",
@@ -22,6 +22,16 @@ const STATUS_STYLE: Record<string, string> = {
 
 const STATUS_KR: Record<string, string> = {
   draft: "초안", review: "검토중", approved: "승인", rejected: "반려", submitted: "제출완료",
+};
+
+const APP_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  pending:     { label: "대기",     cls: "bg-gray-100 text-gray-600" },
+  in_progress: { label: "진행중",   cls: "bg-blue-100 text-blue-700" },
+  rejected:    { label: "서류반려", cls: "bg-orange-100 text-orange-700" },
+  submitted:   { label: "제출완료", cls: "bg-green-100 text-green-700" },
+  cancelled:   { label: "취소",     cls: "bg-gray-100 text-gray-400" },
+  won:         { label: "낙찰",     cls: "bg-yellow-100 text-yellow-700" },
+  lost:        { label: "유찰",     cls: "bg-red-100 text-red-600" },
 };
 
 function DocumentReviewer({
@@ -46,7 +56,7 @@ function DocumentReviewer({
     }
   };
 
-  const canReview = doc.status === "draft" || doc.status === "review";
+  const canReview = ["draft", "review", "rejected"].includes(doc.status);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -298,9 +308,29 @@ export default function ApplicationDetailClient({ app }: { app: BidApplication }
   const [docs, setDocs] = useState(app.documents);
   const [status, setStatus] = useState(app.status);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const updateDoc = (updated: Partial<BidDocument> & { id: number }) => {
     setDocs((prev) => prev.map((d) => (d.id === updated.id ? { ...d, ...updated } : d)));
+    // 서류 상태 변경 후 app status 낙관적 업데이트
+    const newDocs = docs.map((d) => (d.id === updated.id ? { ...d, ...updated } : d));
+    if (!["submitted", "won", "lost", "cancelled"].includes(status)) {
+      const hasRejected = newDocs.some((d) => d.status === "rejected");
+      setStatus(hasRejected ? "rejected" : "in_progress");
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!confirm("이 입찰 지원을 취소하시겠습니까?")) return;
+    setCancelling(true);
+    try {
+      await cancelApplication(app.id);
+      setStatus("cancelled");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "취소 실패");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const allApproved = docs.length > 0 && docs.every((d) => d.status === "approved");
@@ -321,9 +351,45 @@ export default function ApplicationDetailClient({ app }: { app: BidApplication }
 
   const approved = docs.filter((d) => d.status === "approved").length;
 
+  const appStatusInfo = APP_STATUS_LABEL[status] ?? { label: status, cls: "bg-gray-100 text-gray-600" };
+
   return (
     <div className="space-y-4">
+      {/* 현재 상태 + 취소 버튼 */}
+      <div className="flex items-center justify-between">
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${appStatusInfo.cls}`}>
+          {appStatusInfo.label}
+        </span>
+        {!["submitted", "won", "lost", "cancelled"].includes(status) && (
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="text-xs text-red-500 hover:underline disabled:opacity-50"
+          >
+            {cancelling ? "취소 중..." : "지원 취소"}
+          </button>
+        )}
+      </div>
+
+      {/* 서류 반려 배너 */}
+      {status === "rejected" && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <p className="text-sm font-semibold text-orange-800">서류 반려됨</p>
+          <p className="text-xs text-orange-700 mt-0.5">
+            반려된 서류를 수정 후 재승인 하거나, 취소하세요.
+          </p>
+        </div>
+      )}
+
+      {/* 취소 배너 */}
+      {status === "cancelled" && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+          <p className="font-medium text-gray-600">지원 취소됨</p>
+        </div>
+      )}
+
       {/* 진행 현황 */}
+      {status !== "cancelled" && (
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-700">서류 승인 현황</span>
@@ -336,16 +402,19 @@ export default function ApplicationDetailClient({ app }: { app: BidApplication }
           />
         </div>
       </div>
+      )}
 
       {/* 서류 목록 */}
+      {status !== "cancelled" && (
       <div className="space-y-2">
         {docs.map((doc) => (
           <DocumentReviewer key={doc.id} doc={doc} onUpdated={updateDoc} />
         ))}
       </div>
+      )}
 
       {/* 제출 버튼 - HITL */}
-      {status !== "submitted" && (
+      {status !== "submitted" && status !== "cancelled" && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
           <div>
             <p className="text-sm font-medium text-amber-800">전자입찰 제출</p>

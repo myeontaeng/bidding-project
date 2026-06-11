@@ -1,16 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { BidApplication, Company, Announcement, createApplication } from "@/lib/api";
 
-const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  pending:     { label: "대기", cls: "bg-gray-100 text-gray-600" },
-  in_progress: { label: "진행중", cls: "bg-blue-100 text-blue-700" },
+export const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  pending:     { label: "대기",     cls: "bg-gray-100 text-gray-600" },
+  in_progress: { label: "진행중",   cls: "bg-blue-100 text-blue-700" },
+  rejected:    { label: "서류반려", cls: "bg-orange-100 text-orange-700" },
   submitted:   { label: "제출완료", cls: "bg-green-100 text-green-700" },
-  won:         { label: "낙찰", cls: "bg-yellow-100 text-yellow-700" },
-  lost:        { label: "유찰", cls: "bg-red-100 text-red-600" },
+  cancelled:   { label: "취소",     cls: "bg-gray-100 text-gray-400" },
+  won:         { label: "낙찰",     cls: "bg-yellow-100 text-yellow-700" },
+  lost:        { label: "유찰",     cls: "bg-red-100 text-red-600" },
 };
+
+const FILTER_OPTIONS = [
+  { value: "", label: "전체" },
+  { value: "in_progress", label: "진행중" },
+  { value: "rejected", label: "서류반려" },
+  { value: "submitted", label: "제출완료" },
+  { value: "won", label: "낙찰" },
+  { value: "lost", label: "유찰" },
+  { value: "cancelled", label: "취소" },
+];
 
 interface Props {
   initialApplications: BidApplication[];
@@ -24,8 +36,30 @@ export default function ApplicationsClient({ initialApplications, companies, ann
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ announcement_id: 0, company_id: 0, bid_price: "", notes: "" });
   const [creating, setCreating] = useState(false);
-
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // 검색 / 필터
+  const [keyword, setKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const filtered = useMemo(() => {
+    let list = apps;
+    if (statusFilter) list = list.filter((a) => a.status === statusFilter);
+    if (keyword.trim()) {
+      const kw = keyword.trim().toLowerCase();
+      list = list.filter((a) => {
+        const ann = announcements.find((x) => x.id === a.announcement_id);
+        const co = companies.find((x) => x.id === a.company_id);
+        return (
+          ann?.title?.toLowerCase().includes(kw) ||
+          ann?.organization?.toLowerCase().includes(kw) ||
+          co?.name?.toLowerCase().includes(kw) ||
+          a.notes?.toLowerCase().includes(kw)
+        );
+      });
+    }
+    return list;
+  }, [apps, keyword, statusFilter, announcements, companies]);
 
   const handleCreate = async () => {
     if (!form.announcement_id || !form.company_id) return;
@@ -51,8 +85,58 @@ export default function ApplicationsClient({ initialApplications, companies, ann
 
   return (
     <div className="space-y-4">
+      {/* 검색 + 필터 바 */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="공고명, 발주처, 회사, 메모 검색..."
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <div className="flex gap-1.5 flex-wrap">
+          {FILTER_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setStatusFilter(value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                statusFilter === value
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {label}
+              {value === "" && apps.length > 0 && (
+                <span className="ml-1 text-xs opacity-70">({apps.length})</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 결과 수 */}
+      {(keyword || statusFilter) && (
+        <p className="text-xs text-gray-400">
+          {filtered.length}건 표시 중
+          {(keyword || statusFilter) && (
+            <button
+              onClick={() => { setKeyword(""); setStatusFilter(""); }}
+              className="ml-2 text-blue-500 hover:underline"
+            >
+              초기화
+            </button>
+          )}
+        </p>
+      )}
+
       {/* 지원 건 목록 */}
-      {apps.map((app) => {
+      {filtered.length === 0 && !showForm && (
+        <div className="text-center py-10 text-gray-400 text-sm">
+          {keyword || statusFilter ? "검색 결과 없음" : "입찰 지원 내역이 없습니다"}
+        </div>
+      )}
+
+      {filtered.map((app) => {
         const ann = announcements.find((a) => a.id === app.announcement_id);
         const co = companies.find((c) => c.id === app.company_id);
         const st = STATUS_LABEL[app.status] ?? { label: app.status, cls: "bg-gray-100 text-gray-600" };
@@ -74,13 +158,14 @@ export default function ApplicationsClient({ initialApplications, companies, ann
                   {co?.name ?? `회사 #${app.company_id}`} · {ann?.organization}
                 </div>
               </div>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${st.cls}`}>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${st.cls}`}>
                 {st.label}
               </span>
             </div>
             <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
-              <span>서류 승인 {approved}/{total}</span>
+              {total > 0 && <span>서류 승인 {approved}/{total}</span>}
               {app.bid_price && <span>투찰가 {app.bid_price.toLocaleString()}원</span>}
+              {app.notes && <span className="truncate max-w-[150px]">{app.notes}</span>}
               <span className="ml-auto text-xs text-gray-400">
                 {new Date(app.created_at).toLocaleDateString("ko-KR")}
               </span>
