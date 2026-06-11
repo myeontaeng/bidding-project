@@ -500,22 +500,42 @@ def _matches_filter(ann: Announcement, fc: FilterConfig) -> bool:
     return True
 
 
-_BID_METHODS = {"전자입찰", "직찰", "전자시담", "수의계약", "제한경쟁입찰", "일반경쟁입찰", "지명경쟁입찰"}
+_BID_METHODS = {
+    "전자입찰", "직찰", "전자시담", "수의계약",
+    "제한경쟁입찰", "일반경쟁입찰", "지명경쟁입찰",
+    "직찰/우편", "전자입찰/우편", "직접구매",
+}
+# 물품 대분류 → 세분류로 재처리 대상
+_NEEDS_RECLASSIFY = _BID_METHODS | {"물품구매", "물품", "IT장비"}
 
 
 async def backfill_category(db: AsyncSession) -> int:
-    """category가 입찰방법으로 저장된 기존 데이터 → 업종으로 재분류.
-    support_type이 NULL인 경우도 함께 보정."""
+    """category가 입찰방법/대분류로 저장된 기존 데이터 → 업종 세분류로 재분류."""
     from app.crawlers.g2b_crawler import _classify_category
 
     rows = list((await db.execute(
         select(Announcement).where(
             or_(
-                Announcement.category.in_(_BID_METHODS),
+                Announcement.category.in_(_NEEDS_RECLASSIFY),
                 Announcement.category.is_(None),
+                # 직찰/우편/상시 등 변형 패턴 포함
+                Announcement.category.like("%입찰%"),
+                Announcement.category.like("%직찰%"),
+                Announcement.category.like("%시담%"),
+                Announcement.category.like("%수의계약%"),
             )
         )
     )).scalars().all())
+
+    def _infer_operation(raw: dict) -> str | None:
+        """raw_data 필드 패턴으로 API 오퍼레이션 추론."""
+        if raw.get("prdctClsfcNo") or raw.get("prdctClsfcNmList"):
+            return "getBidPblancListInfoThng"
+        if raw.get("cnstrtnClsfcNo") or raw.get("budgttClsfcNm"):
+            return "getBidPblancListInfoCnstwk"
+        if raw.get("bidClsfcNmList") or raw.get("opengPlce"):
+            return "getBidPblancListInfoServc"
+        return None
 
     updated = 0
     for ann in rows:
@@ -526,8 +546,9 @@ async def backfill_category(db: AsyncSession) -> int:
         if ann.support_type is None and bid_method in _BID_METHODS:
             ann.support_type = bid_method
 
-        # category → 업종으로 재분류
-        ann.category = _classify_category(ann.title or "")
+        # raw_data로 operation 추론 후 세분류
+        operation = _infer_operation(raw)
+        ann.category = _classify_category(ann.title or "", operation)
         updated += 1
 
     if updated:

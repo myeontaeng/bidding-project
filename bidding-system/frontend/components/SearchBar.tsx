@@ -111,7 +111,6 @@ export default function SearchBar() {
           <option value="">업종 전체</option>
           <optgroup label="IT / SW">
             <option value="IT서비스">IT서비스</option>
-            <option value="IT장비">IT장비</option>
           </optgroup>
           <optgroup label="공사">
             <option value="시설공사">시설공사</option>
@@ -121,7 +120,14 @@ export default function SearchBar() {
             <option value="건설공사">건설공사</option>
           </optgroup>
           <optgroup label="물품">
-            <option value="물품구매">물품구매</option>
+            <option value="IT장비">IT장비</option>
+            <option value="의료기기">의료기기</option>
+            <option value="차량·장비">차량·장비</option>
+            <option value="식품·식자재">식품·식자재</option>
+            <option value="가구·비품">가구·비품</option>
+            <option value="소방·안전장비">소방·안전장비</option>
+            <option value="사무용품">사무용품</option>
+            <option value="물품구매">기타 물품구매</option>
           </optgroup>
           <optgroup label="용역">
             <option value="용역">용역</option>

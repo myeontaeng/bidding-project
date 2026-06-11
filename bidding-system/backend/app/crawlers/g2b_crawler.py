@@ -39,8 +39,20 @@ def _classify_category(title: str, operation: str | None = None) -> str:
         return "시설공사"
 
     if operation == "getBidPblancListInfoThng":
-        if any(w in tl for w in ["it", "pc", "노트북", "서버", "네트워크장비", "전산"]):
+        if any(w in tl for w in ["it", "pc", "노트북", "서버", "네트워크장비", "전산", "gpu", "컴퓨터", "모니터", "프린터", "스위치"]):
             return "IT장비"
+        if any(w in tl for w in ["의료", "진단", "수술", "의약", "의료기기", "처치", "치료", "검사기", "x-ray", "mri", "ct"]):
+            return "의료기기"
+        if any(w in tl for w in ["차량", "자동차", "트럭", "버스", "지게차", "굴삭기", "중장비", "소방차", "구급차", "승합"]):
+            return "차량·장비"
+        if any(w in tl for w in ["식품", "식자재", "급식", "농산물", "수산물", "육류", "채소", "과일", "먹거리"]):
+            return "식품·식자재"
+        if any(w in tl for w in ["가구", "책상", "의자", "침대", "선반", "사물함", "비품", "집기", "칠판"]):
+            return "가구·비품"
+        if any(w in tl for w in ["소방", "안전장비", "방호복", "보호구", "소화기", "구명", "방화"]):
+            return "소방·안전장비"
+        if any(w in tl for w in ["사무용품", "소모품", "복사지", "잉크", "토너", "문구"]):
+            return "사무용품"
         return "물품구매"
 
     if operation == "getBidPblancListInfoServc":
@@ -57,10 +69,37 @@ def _classify_category(title: str, operation: str | None = None) -> str:
     # 오퍼레이션 미상 (Playwright 등) — 제목 기반 추론
     if any(w in tl for w in _IT_KW) or any(w in tl for w in _IT_PARTIAL):
         return "IT서비스"
-    if any(w in tl for w in ["건설", "공사", "건축", "시공", "토목"]):
-        return "건설공사"
-    if any(w in tl for w in ["물품", "구매", "조달", "납품", "기자재"]):
+    if any(w in tl for w in ["건설", "건축", "신축", "증축", "리모델링"]):
+        return "건축공사"
+    if any(w in tl for w in ["토목", "도로", "교량", "하수도", "항만"]):
+        return "토목공사"
+    if any(w in tl for w in ["공사", "시공"]):
+        return "시설공사"
+    # 물품 세분류 — "구매/납품/취득" 동반 시만 물품으로 분류 (용역 오분류 방지)
+    has_purchase = any(w in tl for w in ["구매", "납품", "취득", "조달", "기자재"])
+    if has_purchase:
+        if any(w in tl for w in ["의료기기", "의료장비", "의약품", "mri", "ct", "초음파", "내시경", "x-ray"]):
+            return "의료기기"
+        if any(w in tl for w in ["차량", "자동차", "트럭", "버스", "굴삭기", "지게차", "소방차", "구급차"]):
+            return "차량·장비"
+        if any(w in tl for w in ["식자재", "식품", "급식재료", "농산물", "수산물", "육류"]):
+            return "식품·식자재"
+        if any(w in tl for w in ["가구", "책상", "의자", "침대", "사물함", "집기", "비품"]):
+            return "가구·비품"
+        if any(w in tl for w in ["소방장비", "소화기", "안전장비", "방호복", "보호구", "구명"]):
+            return "소방·안전장비"
+        if any(w in tl for w in ["사무용품", "소모품", "복사지", "잉크", "토너", "문구"]):
+            return "사무용품"
+        if any(w in tl for w in ["it", "pc", "노트북", "서버", "gpu", "컴퓨터", "모니터", "프린터"]):
+            return "IT장비"
         return "물품구매"
+    # 용역 세분류
+    if any(w in tl for w in ["연구", "조사", "분석", "평가", "진단", "실태"]):
+        return "연구용역"
+    if any(w in tl for w in ["교육", "훈련", "컨설팅", "자문", "강의"]):
+        return "교육·컨설팅"
+    if any(w in tl for w in ["청소", "경비", "시설관리", "유지관리", "환경미화"]):
+        return "시설관리"
     return "용역"
 _G2B_LIST_URL = "https://www.g2b.go.kr/ep/invitation/publish/bidPublishInfoList.do"
 _DT_FMTS = ("%Y%m%d%H%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M", "%Y%m%d")
