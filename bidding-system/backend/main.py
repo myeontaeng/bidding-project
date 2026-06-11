@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     from app.services.seed_demo import seed_demo_data
     from app.models.award_record import PriceModel
     from sqlalchemy import select, func
-    from app.services.announcement import backfill_deadlines, close_expired_announcements
+    from app.services.announcement import backfill_deadlines, close_expired_announcements, backfill_category
     try:
         from backfill_new_fields import backfill as _backfill_new_fields
     except ImportError:
@@ -38,6 +38,10 @@ async def lifespan(app: FastAPI):
         closed = await close_expired_announcements(db)
         if closed:
             logging.getLogger(__name__).info("Auto-closed %d expired announcements on startup", closed)
+        # 기존 category(입찰방법값) → 업종으로 재분류
+        cat_fixed = await backfill_category(db)
+        if cat_fixed:
+            logging.getLogger(__name__).info("Reclassified category for %d announcements", cat_fixed)
         # P3: 낙찰 이력 없으면 시드 데이터 수집
         await collect_award_records(db)
         # P3: 학습된 모델 없으면 자동 학습

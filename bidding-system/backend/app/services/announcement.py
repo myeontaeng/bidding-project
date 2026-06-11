@@ -286,6 +286,8 @@ def _build_conditions(f: AnnouncementFilter) -> list:
         )
     if f.category:
         conditions.append(Announcement.category == f.category)
+    if f.support_type:
+        conditions.append(Announcement.support_type == f.support_type)
     if f.region:
         conditions.append(Announcement.region == f.region)
     if f.organization:
@@ -496,6 +498,41 @@ def _matches_filter(ann: Announcement, fc: FilterConfig) -> bool:
         if ann.budget > fc.budget_max:
             return False
     return True
+
+
+_BID_METHODS = {"전자입찰", "직찰", "전자시담", "수의계약", "제한경쟁입찰", "일반경쟁입찰", "지명경쟁입찰"}
+
+
+async def backfill_category(db: AsyncSession) -> int:
+    """category가 입찰방법으로 저장된 기존 데이터 → 업종으로 재분류.
+    support_type이 NULL인 경우도 함께 보정."""
+    from app.crawlers.g2b_crawler import _classify_category
+
+    rows = list((await db.execute(
+        select(Announcement).where(
+            or_(
+                Announcement.category.in_(_BID_METHODS),
+                Announcement.category.is_(None),
+            )
+        )
+    )).scalars().all())
+
+    updated = 0
+    for ann in rows:
+        raw = ann.raw_data or {}
+        bid_method = raw.get("bidMethdNm") or ann.support_type or ann.category
+
+        # support_type 보정
+        if ann.support_type is None and bid_method in _BID_METHODS:
+            ann.support_type = bid_method
+
+        # category → 업종으로 재분류
+        ann.category = _classify_category(ann.title or "")
+        updated += 1
+
+    if updated:
+        await db.commit()
+    return updated
 
 
 async def send_dday_reminders(db: AsyncSession):

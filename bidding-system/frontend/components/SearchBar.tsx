@@ -3,7 +3,15 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-const CATEGORIES = ["전자입찰", "전자시담", "직찰", "용역", "물품", "공사", "건설공사", "IT서비스", "시설관리"];
+const CATEGORIES = [
+  "IT서비스", "IT장비",
+  "시설공사", "건축공사", "토목공사", "전기·통신공사", "건설공사",
+  "물품구매",
+  "용역", "연구용역", "교육·컨설팅", "시설관리",
+];
+
+const BID_METHODS = ["전자입찰", "직찰", "전자시담", "수의계약"];
+
 const REGIONS = ["서울", "경기", "부산", "인천", "대전", "광주", "울산", "세종", "강원", "충북", "충남", "경남", "경북", "전남", "전북", "제주", "전국"];
 
 function addDays(days: number): string {
@@ -17,6 +25,7 @@ export default function SearchBar() {
   const params = useSearchParams();
   const [keyword, setKeyword] = useState(params.get("keyword") ?? "");
   const [category, setCategory] = useState(params.get("category") ?? "");
+  const [supportType, setSupportType] = useState(params.get("support_type") ?? "");
   const [region, setRegion] = useState(params.get("region") ?? "");
   const [org, setOrg] = useState(params.get("organization") ?? "");
   const [budgetMin, setBudgetMin] = useState(params.get("budget_min") ?? "");
@@ -29,6 +38,7 @@ export default function SearchBar() {
     const p = new URLSearchParams();
     if (keyword) p.set("keyword", keyword);
     if (category) p.set("category", category);
+    if (supportType) p.set("support_type", supportType);
     if (region) p.set("region", region);
     if (org) p.set("organization", org);
     if (budgetMin) p.set("budget_min", budgetMin);
@@ -43,7 +53,7 @@ export default function SearchBar() {
   };
 
   const reset = () => {
-    setKeyword(""); setCategory(""); setRegion(""); setOrg("");
+    setKeyword(""); setCategory(""); setSupportType(""); setRegion(""); setOrg("");
     setBudgetMin(""); setBudgetMax(""); setStatus("open"); setDdayWithin(""); setSortBy("deadline");
     router.push("/");
   };
@@ -86,7 +96,7 @@ export default function SearchBar() {
         </button>
       </div>
 
-      {/* 필터 행 1: 상태 / 업종 / 지역 / 발주처 */}
+      {/* 필터 행 1: 상태 / 업종 / 입찰방법 / 지역 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
           <option value="open">진행중 (마감일 유효)</option>
@@ -99,24 +109,48 @@ export default function SearchBar() {
 
         <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
           <option value="">업종 전체</option>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          <optgroup label="IT / SW">
+            <option value="IT서비스">IT서비스</option>
+            <option value="IT장비">IT장비</option>
+          </optgroup>
+          <optgroup label="공사">
+            <option value="시설공사">시설공사</option>
+            <option value="건축공사">건축공사</option>
+            <option value="토목공사">토목공사</option>
+            <option value="전기·통신공사">전기·통신공사</option>
+            <option value="건설공사">건설공사</option>
+          </optgroup>
+          <optgroup label="물품">
+            <option value="물품구매">물품구매</option>
+          </optgroup>
+          <optgroup label="용역">
+            <option value="용역">용역</option>
+            <option value="연구용역">연구용역</option>
+            <option value="교육·컨설팅">교육·컨설팅</option>
+            <option value="시설관리">시설관리</option>
+          </optgroup>
+        </select>
+
+        <select value={supportType} onChange={(e) => setSupportType(e.target.value)} className={selectCls}>
+          <option value="">입찰방법 전체</option>
+          {BID_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
 
         <select value={region} onChange={(e) => setRegion(e.target.value)} className={selectCls}>
           <option value="">지역 전체</option>
           {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
+      </div>
 
+      {/* 필터 행 2: 발주처 / 마감 / 예산 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <input
           value={org}
           onChange={(e) => setOrg(e.target.value)}
           placeholder="발주처"
           className={inputCls}
         />
-      </div>
 
-      {/* 필터 행 2: 마감 D-day / 예산 범위 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <select value={ddayWithin} onChange={(e) => setDdayWithin(e.target.value)} className={selectCls}>
           <option value="">마감 기한 전체</option>
           <option value="0">오늘 마감 (D-0)</option>
@@ -142,8 +176,6 @@ export default function SearchBar() {
             className={`flex-1 ${inputCls}`}
           />
         </div>
-
-        <div className="hidden md:block" />
       </div>
     </div>
   );

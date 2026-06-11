@@ -134,6 +134,7 @@ export interface FilterConfig {
 export interface AnnouncementQuery {
   keyword?: string;
   category?: string;
+  support_type?: string;
   region?: string;
   organization?: string;
   budget_min?: number;

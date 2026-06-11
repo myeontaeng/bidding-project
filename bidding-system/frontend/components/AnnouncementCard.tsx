@@ -89,14 +89,19 @@ export default function AnnouncementCard({ ann }: Props) {
     <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1">
             {ann.category && (
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-medium">
                 {ann.category}
               </span>
             )}
-            {ann.region && (
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+            {ann.support_type && (
+              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
+                {ann.support_type}
+              </span>
+            )}
+            {ann.region && ann.region !== "전국" && (
+              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
                 {ann.region}
               </span>
             )}

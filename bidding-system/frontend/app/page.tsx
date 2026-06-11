@@ -18,6 +18,7 @@ export default async function Home({ searchParams }: PageProps) {
   const [{ data: announcements, total }, overview, archiveStats, collections] = await Promise.all([
     fetchAnnouncements({
       ...query,
+      support_type: (query as Record<string, string>).support_type,
       status: (query as Record<string, string>).status ?? "open",
       page,
       size: PAGE_SIZE,

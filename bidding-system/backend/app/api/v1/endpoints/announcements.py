@@ -19,6 +19,7 @@ async def list_announcements(
     response: Response,
     keyword: str | None = Query(None),
     category: str | None = Query(None),
+    support_type: str | None = Query(None),
     region: str | None = Query(None),
     organization: str | None = Query(None),
     budget_min: float | None = Query(None),
@@ -42,9 +43,10 @@ async def list_announcements(
             return None
 
     f = AnnouncementFilter(
-        keyword=keyword, category=category, region=region,
-        organization=organization, budget_min=budget_min,
-        budget_max=budget_max, status=status, page=page, size=size,
+        keyword=keyword, category=category, support_type=support_type,
+        region=region, organization=organization,
+        budget_min=budget_min, budget_max=budget_max,
+        status=status, page=page, size=size,
         deadline_before=_parse_date(deadline_before, end_of_day=True),
         deadline_after=_parse_date(deadline_after),
         sort_by=sort_by,

@@ -39,6 +39,7 @@ class AnnouncementRead(AnnouncementBase):
 class AnnouncementFilter(BaseModel):
     keyword: str | None = None
     category: str | None = None
+    support_type: str | None = None
     region: str | None = None
     organization: str | None = None
     budget_min: float | None = None
