@@ -282,6 +282,7 @@ def _build_conditions(f: AnnouncementFilter) -> list:
             or_(
                 Announcement.title.ilike(f"%{f.keyword}%"),
                 Announcement.organization.ilike(f"%{f.keyword}%"),
+                Announcement.bid_number.ilike(f"%{f.keyword}%"),
             )
         )
     if f.category:

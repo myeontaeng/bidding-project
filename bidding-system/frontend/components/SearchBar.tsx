@@ -69,7 +69,7 @@ export default function SearchBar() {
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
-          placeholder="키워드 검색 (제목, 발주처)"
+          placeholder="키워드 검색 (제목, 발주처, 공고번호)"
           className={`flex-1 ${inputCls}`}
         />
         <select

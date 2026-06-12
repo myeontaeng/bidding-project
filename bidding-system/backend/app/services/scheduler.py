@@ -20,7 +20,7 @@ scheduler = AsyncIOScheduler()
 async def _run_crawl():
     logger.info("Crawl job start")
     try:
-        items = await crawl_g2b(max_pages=3)
+        items = await crawl_g2b(max_pages=8)
         async with AsyncSessionLocal() as db:
             new, dup = await upsert_announcements(db, items)
             logger.info("Crawl done: new=%d dup=%d", new, dup)

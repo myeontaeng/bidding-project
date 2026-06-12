@@ -180,7 +180,9 @@ async def _crawl_via_api(max_pages: int) -> list[dict]:
     """data.go.kr OpenAPI (조달청_나라장터입찰공고정보서비스 v2)"""
     results = []
     now = datetime.now()
-    inqry_bgn = (now - timedelta(days=7)).strftime("%Y%m%d%H%M")
+    # 7일치 + max_pages=3 → 오름차순 반환으로 최신 공고 누락
+    # 2일치 + max_pages 증가로 최신 공고 확실히 수집
+    inqry_bgn = (now - timedelta(days=2)).strftime("%Y%m%d%H%M")
     inqry_end = now.strftime("%Y%m%d%H%M")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
